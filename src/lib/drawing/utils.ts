@@ -1,11 +1,28 @@
 export function getAppBaseUrl(): string {
-  const configured =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.VERCEL_URL?.trim();
+  const publicUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const vercelUrl = process.env.VERCEL_URL?.trim();
 
-  if (!configured) return "http://localhost:3000";
-  if (configured.startsWith("http")) return configured.replace(/\/$/, "");
-  return `https://${configured.replace(/\/$/, "")}`;
+  // On Vercel, ignore localhost in NEXT_PUBLIC_APP_URL (common misconfiguration).
+  if (
+    publicUrl &&
+    !publicUrl.includes("localhost") &&
+    !publicUrl.includes("127.0.0.1")
+  ) {
+    if (publicUrl.startsWith("http")) return publicUrl.replace(/\/$/, "");
+    return `https://${publicUrl.replace(/\/$/, "")}`;
+  }
+
+  if (vercelUrl) {
+    if (vercelUrl.startsWith("http")) return vercelUrl.replace(/\/$/, "");
+    return `https://${vercelUrl.replace(/\/$/, "")}`;
+  }
+
+  if (publicUrl) {
+    if (publicUrl.startsWith("http")) return publicUrl.replace(/\/$/, "");
+    return `https://${publicUrl.replace(/\/$/, "")}`;
+  }
+
+  return "http://localhost:3000";
 }
 
 export function drawingSessionUrl(sessionId: string): string {

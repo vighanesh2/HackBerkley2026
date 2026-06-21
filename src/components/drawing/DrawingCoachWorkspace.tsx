@@ -6,7 +6,6 @@ import CoachDock from "@/components/drawing/CoachDock";
 import DrawingCanvas from "@/components/drawing/DrawingCanvas";
 import { useDrawingCoachLoop } from "@/hooks/useDrawingCoachLoop";
 import type { DrawingSessionPublicView } from "@/types/drawing";
-import "tldraw/tldraw.css";
 
 type DrawingCoachWorkspaceProps = {
   sessionId: string;
@@ -131,8 +130,11 @@ export default function DrawingCoachWorkspace({
             the shadow guide and learn what to draw next.
           </div>
         ) : (
-          <div className="mb-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">
-            Upload the diagram you want to learn. You won&apos;t see it — only the AI coach will.
+          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <span className="font-medium">Step 1:</span> click{" "}
+            <span className="font-medium">Upload reference</span> (top right) with the diagram you
+            want to learn. The coach sees it — you draw on the blank canvas below. You do not need
+            a reference to use the canvas; coaching starts after upload.
           </div>
         )}
 

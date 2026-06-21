@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { Editor, TLComponents } from "tldraw";
 import ReferenceShadowLayer from "@/components/drawing/ReferenceShadowLayer";
 import {
@@ -10,13 +10,19 @@ import {
 } from "@/components/drawing/drawing-ghost-context";
 import { DRAWING_FRAME, setupDrawingFrame } from "@/lib/drawing/canvas-bounds";
 
+function CanvasLoading() {
+  return (
+    <div className="drawing-canvas-grid flex h-full min-h-[420px] items-center justify-center rounded-xl border border-neutral-200">
+      <p className="rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-neutral-600 shadow-sm">
+        Loading drawing tools…
+      </p>
+    </div>
+  );
+}
+
 const Tldraw = dynamic(async () => (await import("tldraw")).Tldraw, {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center text-sm text-neutral-500">
-      Loading canvas…
-    </div>
-  ),
+  loading: () => <CanvasLoading />,
 });
 
 const TLDRAW_COMPONENTS: TLComponents = {
@@ -39,6 +45,7 @@ export default function DrawingCanvas({
   onEditorReady,
 }: DrawingCanvasProps) {
   const editorRef = useRef<Editor | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
 
   const ghostState = useMemo<DrawingGhostState>(
     () => ({
@@ -53,6 +60,7 @@ export default function DrawingCanvas({
     (editor: Editor) => {
       editorRef.current = editor;
       setupDrawingFrame(editor);
+      setEditorReady(true);
       onEditorReady?.(editor);
 
       const notify = () => onActivity?.();
@@ -63,8 +71,8 @@ export default function DrawingCanvas({
 
   return (
     <DrawingGhostProvider value={ghostState}>
-      <div className="absolute inset-0 overflow-hidden rounded-xl border border-neutral-200 bg-white">
-        <div className="relative h-full w-full">
+      <div className="drawing-canvas-shell absolute inset-0 overflow-hidden rounded-xl border border-neutral-200">
+        <div className={`relative h-full w-full ${editorReady ? "" : "invisible"}`}>
           <Tldraw
             colorScheme="light"
             components={TLDRAW_COMPONENTS}
@@ -72,6 +80,11 @@ export default function DrawingCanvas({
             autoFocus
           />
         </div>
+        {!editorReady && (
+          <div className="absolute inset-0 z-10">
+            <CanvasLoading />
+          </div>
+        )}
       </div>
     </DrawingGhostProvider>
   );

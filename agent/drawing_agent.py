@@ -34,6 +34,8 @@ from uagents_core.contrib.protocols.chat import (
 agent = Agent()
 protocol = Protocol(spec=chat_protocol_spec)
 
+AGENT_VERSION = "2026-06-21-v2"
+
 DIAGRAM_KEYWORDS = re.compile(
     r"\b("
     r"draw|sketch|diagram|canvas|schematic|circuit|flowchart|"
@@ -145,7 +147,7 @@ def config_status_message(ctx: Context | None = None) -> str:
     backend = check_backend_health(ctx) if ctx else "Backend: (ping from agent chat to verify)"
     return "\n".join(
         [
-            "Diagram Drawing Coach is online.",
+            f"Diagram Drawing Coach is online (script {AGENT_VERSION}).",
             f"App URL: {'configured' if get_app_base_url() else 'MISSING — set DRAWING_APP_URL'}",
             f"Agent secret: {'configured' if get_agent_api_secret() else 'MISSING — set AGENT_API_SECRET'}",
             backend,
