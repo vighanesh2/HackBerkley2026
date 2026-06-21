@@ -31,6 +31,7 @@ Open [http://localhost:3000](http://localhost:3000) — you land on the canvas t
 | `NEXT_PUBLIC_APP_URL` | Canvas links (e.g. `http://localhost:3000`) |
 | `AGENT_API_SECRET` | Auth for Agentverse → API calls |
 | `VISION_API_KEY` | Vision coach (or `OPENAI_API_KEY`) |
+| `DEEPGRAM_API_KEY` | Optional — Deepgram voice (STT + TTS); falls back to browser speech if unset |
 
 Optional: Supabase for reference image storage (`NEXT_PUBLIC_SUPABASE_URL`, keys).
 

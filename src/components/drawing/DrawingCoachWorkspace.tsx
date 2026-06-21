@@ -161,6 +161,7 @@ export default function DrawingCoachWorkspace({
         lastTip={coach.lastTip}
         lastSpoken={coach.lastSpoken}
         error={coach.error}
+        voiceProvider={coach.voiceProvider}
         onToggleMute={coach.toggleMute}
         onToggleListening={coach.toggleListening}
         onToggleGhost={coach.toggleGhost}

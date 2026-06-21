@@ -5,36 +5,14 @@ import type { Editor } from "tldraw";
 import { exportCanvasPng } from "@/components/drawing/DrawingCanvas";
 import { clearCoachHints, drawCoachHints } from "@/lib/drawing/canvas-hints";
 import { hashBase64Image } from "@/lib/drawing/utils";
+import {
+  BrowserMicSession,
+  DeepgramMicSession,
+  createMicSession,
+  speakText,
+  stopSpeaking,
+} from "@/lib/drawing/voice-client";
 import type { CoachTip } from "@/types/drawing";
-
-type SpeechRecognitionResultLike = {
-  isFinal: boolean;
-  0: { transcript: string };
-};
-
-type SpeechRecognitionEventLike = {
-  results: ArrayLike<SpeechRecognitionResultLike>;
-};
-
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
-
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    SpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
 
 type CoachTrigger = "manual" | "hint";
 
@@ -54,11 +32,11 @@ export function useDrawingCoachLoop({
   const editorRef = useRef<Editor | null>(null);
   const inFlightRef = useRef(false);
   const lastHashRef = useRef<string | null>(null);
-  const speechRef = useRef<SpeechRecognitionLike | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const micSessionRef = useRef<DeepgramMicSession | BrowserMicSession | null>(null);
 
   const [listening, setListening] = useState(false);
   const [muted, setMuted] = useState(false);
+  const [voiceProvider, setVoiceProvider] = useState<"deepgram" | "browser" | null>(null);
   const [showGhost, setShowGhost] = useState(false);
   const [ghostImageUrl, setGhostImageUrl] = useState<string | null>(null);
   const [coachActive, setCoachActive] = useState(false);
@@ -69,14 +47,7 @@ export function useDrawingCoachLoop({
 
   const speak = useCallback(
     (text: string) => {
-      if (muted || !text.trim() || typeof window === "undefined") return;
-
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
+      void speakText(text, muted).catch(() => undefined);
     },
     [muted],
   );
@@ -201,64 +172,54 @@ export function useDrawingCoachLoop({
     void requestCoach("hint");
   }, [requestCoach]);
 
-  const startListening = useCallback(() => {
-    if (typeof window === "undefined") return;
-
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setError("Speech recognition is not supported in this browser. Use Chrome.");
-      return;
-    }
-
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      let latest = "";
-      for (let i = 0; i < event.results.length; i += 1) {
-        latest += event.results[i][0].transcript;
-      }
-      setTranscript(latest.trim());
-    };
-
-    recognition.onerror = () => {
-      setListening(false);
-    };
-
-    recognition.onend = () => {
-      if (speechRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          setListening(false);
-        }
-      }
-    };
-
-    speechRef.current = recognition;
-    recognition.start();
-    setListening(true);
-    setError(null);
-  }, []);
-
   const stopListening = useCallback(() => {
-    speechRef.current?.stop();
-    speechRef.current = null;
+    micSessionRef.current?.stop();
+    micSessionRef.current = null;
     setListening(false);
   }, []);
 
+  const startListening = useCallback(async () => {
+    stopListening();
+    setError(null);
+
+    try {
+      const { session, provider } = await createMicSession();
+
+      try {
+        await session.start((nextTranscript) => {
+          setTranscript(nextTranscript);
+        });
+        micSessionRef.current = session;
+        setVoiceProvider(provider);
+        setListening(true);
+        return;
+      } catch (primaryError) {
+        if (provider !== "deepgram") {
+          throw primaryError;
+        }
+      }
+
+      const fallback = new BrowserMicSession();
+      fallback.start((nextTranscript) => {
+        setTranscript(nextTranscript);
+      });
+      micSessionRef.current = fallback;
+      setVoiceProvider("browser");
+      setListening(true);
+    } catch (listenError) {
+      setError(listenError instanceof Error ? listenError.message : "Could not start microphone");
+      setListening(false);
+    }
+  }, [stopListening]);
+
   const toggleListening = useCallback(() => {
     if (listening) stopListening();
-    else startListening();
+    else void startListening();
   }, [listening, startListening, stopListening]);
 
   const toggleMute = useCallback(() => {
     setMuted((value) => {
-      if (!value && typeof window !== "undefined") {
-        window.speechSynthesis.cancel();
-      }
+      if (!value) stopSpeaking();
       return !value;
     });
   }, []);
@@ -266,13 +227,14 @@ export function useDrawingCoachLoop({
   useEffect(() => {
     return () => {
       stopListening();
-      if (typeof window !== "undefined") window.speechSynthesis.cancel();
+      stopSpeaking();
     };
   }, [stopListening]);
 
   return {
     listening,
     muted,
+    voiceProvider,
     showGhost,
     ghostImageUrl,
     coachActive,

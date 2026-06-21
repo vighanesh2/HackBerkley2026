@@ -12,6 +12,7 @@ type CoachDockProps = {
   lastTip: CoachTip | null;
   lastSpoken: string;
   error: string | null;
+  voiceProvider?: "deepgram" | "browser" | null;
   onToggleMute: () => void;
   onToggleListening: () => void;
   onToggleGhost: () => void;
@@ -30,6 +31,7 @@ export default function CoachDock({
   lastTip,
   lastSpoken,
   error,
+  voiceProvider,
   onToggleMute,
   onToggleListening,
   onToggleGhost,
@@ -107,6 +109,9 @@ export default function CoachDock({
         {transcript && (
           <p className="text-sm text-neutral-600">
             <span className="font-medium text-neutral-800">You said:</span> {transcript}
+            {voiceProvider === "deepgram" && (
+              <span className="ml-2 text-xs text-sky-700">(Deepgram)</span>
+            )}
           </p>
         )}
 
