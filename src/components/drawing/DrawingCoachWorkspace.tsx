@@ -96,6 +96,9 @@ export default function DrawingCoachWorkspace({
       <div className="border-b border-neutral-200 bg-white px-4 py-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
+            <p className="mb-0.5 text-lg font-bold tracking-tight text-neutral-900">
+              DiagramEasy
+            </p>
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
               Drawing Coach — Learn mode
             </p>
