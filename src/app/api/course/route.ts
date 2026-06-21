@@ -14,6 +14,8 @@ import {
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import { isAgentCourseRequest } from "@/lib/agent-auth";
 
+export const maxDuration = 120;
+
 type CourseRequestBody = {
   message?: string;
   sessionId?: string;
@@ -97,7 +99,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "message is required" }, { status: 400 });
   }
 
-  const result = await runFeynmanCourseStep(session, message, body.agentVideos, sessionId);
+  const result = await runFeynmanCourseStep(
+    session,
+    message,
+    body.agentVideos,
+    sessionId,
+    { skipVideoDiscovery: fromAgent },
+  );
   saveCourseSession(sessionId, result.session);
 
   let savedCourseId = savedCourseIdInput;

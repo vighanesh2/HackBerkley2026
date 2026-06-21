@@ -27,6 +27,7 @@ const GraphState = Annotation.Root({
   reply: Annotation<string>,
   agentVideos: Annotation<unknown[] | undefined>,
   sessionKey: Annotation<string | undefined>,
+  skipVideoDiscovery: Annotation<boolean | undefined>,
 });
 
 type State = typeof GraphState.State;
@@ -253,7 +254,7 @@ async function generateCourseDocument(state: State): Promise<Partial<State>> {
   const agentVideos = await normalizeAndValidateAgentVideos(state.agentVideos);
   if (agentVideos.length > 0) {
     document = mergeAgentVideos(document, agentVideos);
-  } else {
+  } else if (!state.skipVideoDiscovery) {
     try {
       const discovered = await discoverVideosForCourse(
         topic,
@@ -641,6 +642,7 @@ export async function runFeynmanCourseStep(
   userMessage: string,
   agentVideos?: unknown[],
   sessionKey?: string,
+  options?: { skipVideoDiscovery?: boolean },
 ): Promise<{ session: CourseSession; reply: string }> {
   const result = await graph.invoke({
     session,
@@ -648,6 +650,7 @@ export async function runFeynmanCourseStep(
     reply: "",
     agentVideos,
     sessionKey,
+    skipVideoDiscovery: options?.skipVideoDiscovery,
   });
 
   return {

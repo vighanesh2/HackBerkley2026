@@ -70,5 +70,6 @@ Your pasted textbook excerpt or study notes here...
 |-------|-----|
 | `ASI_API_KEY is not configured` | Add key in Vercel env vars and redeploy |
 | `Unauthorized` / 401 from course API | Set matching `AGENT_COURSE_API_SECRET` on Vercel **and** Agentverse |
-| `Course API is not configured` | Set `COURSE_API_URL` in Agentverse secrets |
-| Agent timeout | Course generation can take 30–90s; agent timeout is 120s |
+| `Course API is not configured` | Set `COURSE_API_URL` in Agentverse secrets (full `https://…/api/course` URL) |
+| Agent timeout / keeps loading / "Could not reach the agent" | ASI:One needs a reply with `EndSessionContent` within ~30s. Re-paste updated `agent/agent.py` — it replies immediately, then sends the course in a follow-up message. Also redeploy Vercel after pulling latest (120s API timeout + faster agent path). |
+| Agent status not **Active** | Agentverse dashboard → click **Run** |

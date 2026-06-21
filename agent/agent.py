@@ -335,6 +335,80 @@ def text_message(text: str) -> ChatMessage:
     )
 
 
+def progress_message(text: str) -> ChatMessage:
+    """Deprecated — ASI:One needs EndSessionContent within ~30s; use text_message for quick replies."""
+    return text_message(text)
+
+
+async def process_course_request(
+    ctx: Context,
+    sender: str,
+    course_message: str,
+    notes: str | None,
+    topic: str | None = None,
+) -> None:
+    try:
+        reply = await asyncio.to_thread(
+            call_course_api,
+            ctx,
+            sender,
+            course_message,
+            None,
+            None,
+            notes,
+        )
+
+        if topic and video_discovery_enabled():
+            ctx.logger.info(f"Optional video discovery for: {topic}")
+            videos = await discover_videos_from_agents(ctx, topic, timeout=12.0)
+            if videos:
+                await asyncio.to_thread(
+                    call_course_api,
+                    ctx,
+                    sender,
+                    "",
+                    videos,
+                    "attachVideos",
+                )
+                reply = f"{reply}{format_video_note(videos)}"
+
+        await ctx.send(sender, text_message(reply))
+    except Exception as error:
+        ctx.logger.exception("Background course request failed")
+        await ctx.send(
+            sender,
+            text_message(
+                "Course generation failed. Check Agentverse logs and confirm "
+                f"COURSE_API_URL + AGENT_COURSE_API_SECRET on Vercel. ({error})"
+            ),
+        )
+
+
+def config_status_message() -> str:
+    parts = [
+        "Feynman Course Agent is online.",
+        f"Course API: {'configured' if get_course_api_url() else 'MISSING — set COURSE_API_URL'}",
+        f"API secret: {'configured' if get_agent_api_secret() else 'MISSING — set AGENT_COURSE_API_SECRET'}",
+    ]
+    return "\n".join(parts)
+
+
+def video_discovery_enabled() -> bool:
+    return os.environ.get("ENABLE_AGENT_VIDEO_DISCOVERY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def course_prompt_for_topic(topic: str) -> str:
+    cleaned = topic.strip()
+    lower = cleaned.lower()
+    if lower.startswith("i want to learn") or lower.startswith("teach me"):
+        return cleaned
+    return f"I want to learn {cleaned}"
+
+
 def call_course_api(
     ctx: Context,
     sender: str,
@@ -398,6 +472,11 @@ def format_video_note(videos: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
+@agent.on_event("startup")
+async def on_startup(ctx: Context):
+    ctx.logger.info(config_status_message())
+
+
 @protocol.on_message(ChatMessage)
 async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
     if AGENT_ADDRESS_PATTERN.match(sender):
@@ -417,35 +496,50 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
             text += item.text
 
     message = normalize_message(text)
-    if not message:
-        reply = (
-            "What would you like to learn? I'll build a course (with RAG if you add "
-            "--- notes --- and your material), find videos via Agentverse agents, "
-            "and teach you using the Feynman Technique."
-        )
-    elif is_likely_topic_request(message):
-        topic, notes = split_topic_and_notes(message)
-        ctx.logger.info(f"Topic request — querying Agentverse video agents for: {topic}")
 
-        videos, reply = await asyncio.gather(
-            discover_videos_from_agents(ctx, topic),
-            asyncio.to_thread(call_course_api, ctx, sender, topic, None, None, notes),
-        )
-
-        if videos:
-            await asyncio.to_thread(
-                call_course_api,
-                ctx,
-                sender,
-                "",
-                videos,
-                "attachVideos",
+    try:
+        if not message:
+            reply = (
+                "What would you like to learn? I'll build a course (with RAG if you add "
+                "--- notes --- and your material) and teach you using the Feynman Technique."
             )
-            reply = f"{reply}{format_video_note(videos)}"
-    else:
-        reply = await asyncio.to_thread(call_course_api, ctx, sender, message, None)
+            await ctx.send(sender, text_message(reply))
+            return
 
-    await ctx.send(sender, text_message(reply))
+        if message.lower() in {"ping", "health", "status"}:
+            await ctx.send(sender, text_message(config_status_message()))
+            return
+
+        if is_likely_topic_request(message):
+            topic, notes = split_topic_and_notes(message)
+            course_message = course_prompt_for_topic(topic)
+
+            await ctx.send(
+                sender,
+                text_message(
+                    f"Got it — building your course on **{topic.strip()}**. "
+                    "This usually takes 30–90 seconds. I'll send the full course in my next message."
+                ),
+            )
+
+            asyncio.create_task(
+                process_course_request(ctx, sender, course_message, notes, topic)
+            )
+            return
+
+        await ctx.send(sender, text_message("One moment…"))
+        asyncio.create_task(
+            process_course_request(ctx, sender, message, None, None)
+        )
+    except Exception as error:
+        ctx.logger.exception("Unhandled agent error")
+        await ctx.send(
+            sender,
+            text_message(
+                "Something went wrong on my side. Check Agentverse logs, confirm "
+                f"COURSE_API_URL and AGENT_COURSE_API_SECRET, then try again. ({error})"
+            ),
+        )
 
 
 @protocol.on_message(ChatAcknowledgement)
