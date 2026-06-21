@@ -28,19 +28,14 @@ Supabase free tier caps auth emails (~few per hour). Fixes:
 3. **Disable Confirm email**: Authentication → Providers → Email.
 4. **Wait ~1 hour** for the quota to reset, or configure **custom SMTP** for production.
 
-## What gets saved
+## What gets saved (optional)
 
-Each signed-in user's courses are stored in `saved_courses`:
-
-- Full course document + lesson progress
-- Feynman session state (phase, module index, gaps)
-- Uploaded notes
-- Chat history with the tutor
+Signed-in users can persist drawing sessions in `drawing_sessions` and reference images in the `drawing-references` storage bucket. The app also works without Supabase using in-memory sessions.
 
 ## Routes
 
 | Route | Purpose |
 |-------|---------|
-| `/login` | Sign in / sign up (email + password, magic link, or Google) |
-| `/library` | Browse saved courses |
-| `/?course=<id>` | Open a saved course |
+| `/` | Start a diagram practice session |
+| `/draw/[sessionId]` | Canvas + vision coach |
+| `/login` | Sign in / sign up (optional) |

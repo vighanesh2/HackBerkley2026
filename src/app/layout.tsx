@@ -15,8 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Feynman Course Agent",
-  description: "AI agent that generates courses and teaches using the Feynman Technique",
+  title: "Diagram Drawing Coach",
+  description:
+    "Learn technical diagrams by drawing — vision AI coach with shadow reference guides. ASI:One Agentverse compatible.",
 };
 
 export default function RootLayout({

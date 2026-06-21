@@ -1,6 +1,6 @@
 # Diagram Drawing Coach — Agentverse + ASI:One
 
-This is a **separate agent** from the Feynman Course Agent. Deploy **`drawing_agent.py`** only.
+Deploy **`agent/drawing_agent.py`** as a hosted agent on Agentverse.
 
 ## Prerequisites
 
@@ -10,10 +10,12 @@ This is a **separate agent** from the Feynman Course Agent. Deploy **`drawing_ag
 | Variable | Example |
 |----------|---------|
 | `NEXT_PUBLIC_APP_URL` | `https://hack-berkley2026.vercel.app` |
-| `AGENT_COURSE_API_SECRET` | shared secret (or `LISTINGS_API_SECRET`) |
+| `AGENT_API_SECRET` | shared secret (legacy: `LISTINGS_API_SECRET`) |
 | `VISION_API_KEY` | OpenAI-compatible vision key |
 
-Test locally: `http://localhost:3000/draw/test?topic=electrical%20circuit`
+Health check: `GET https://your-app.vercel.app/api/drawing/health`
+
+Test locally: `http://localhost:3000` → start a session, or open `/draw/test?topic=electrical%20circuit`
 
 ---
 
@@ -31,7 +33,7 @@ Test locally: `http://localhost:3000/draw/test?topic=electrical%20circuit`
 | Tab | File to copy |
 |-----|----------------|
 | **Script** | `agent/drawing_agent.py` |
-| **README** | `agent/DRAWING_AGENT_README.md` |
+| **Profile / Description** | `agent/DRAWING_AGENT_README.md` |
 
 Click **Save**.
 
@@ -42,14 +44,14 @@ Click **Save**.
 | Secret | Value |
 |--------|--------|
 | `DRAWING_APP_URL` | `https://hack-berkley2026.vercel.app` |
-| `AGENT_API_SECRET` | same as `AGENT_COURSE_API_SECRET` on Vercel |
+| `AGENT_API_SECRET` | same value as Vercel |
 
 ---
 
 ## Step 4 — Run
 
 1. Click **Run** → status **Active**
-2. Test chat: `ping` → should show App URL and API secret configured
+2. Test chat: `ping` → should show backend health (`vision=yes`, `agentSecret=yes`)
 
 ---
 

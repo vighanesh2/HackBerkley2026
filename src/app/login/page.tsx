@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import WorkspaceSkeleton from "@/components/WorkspaceSkeleton";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   EMAIL_RATE_LIMIT_HINT,
@@ -17,6 +16,14 @@ type Status = "idle" | "loading" | "sent" | "error";
 
 function destinationWithSignedIn(nextPath: string): string {
   return nextPath.includes("?") ? `${nextPath}&signedIn=1` : `${nextPath}?signedIn=1`;
+}
+
+function LoginLoading() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center px-6">
+      <p className="text-sm text-notion-muted">Loading…</p>
+    </div>
+  );
 }
 
 function LoginForm() {
@@ -219,7 +226,7 @@ function LoginForm() {
     <div className="relative flex min-h-dvh items-center justify-center px-6 py-16">
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-notion-canvas/70 backdrop-blur-[2px]">
-          <WorkspaceSkeleton />
+          <p className="text-sm text-notion-muted">Please wait…</p>
         </div>
       )}
 
@@ -361,7 +368,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<WorkspaceSkeleton />}>
+    <Suspense fallback={<LoginLoading />}>
       <LoginForm />
     </Suspense>
   );

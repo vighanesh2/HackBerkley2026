@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/server";
-import { isAgentCourseRequest } from "@/lib/agent-auth";
+import { isAgentRequest } from "@/lib/agent-auth";
 import {
   createDrawingSession,
   getDrawingSessionPublicView,
@@ -15,7 +15,7 @@ type CreateSessionBody = {
 };
 
 export async function POST(request: NextRequest) {
-  const fromAgent = isAgentCourseRequest(request);
+  const fromAgent = isAgentRequest(request);
   const user = fromAgent ? null : await getAuthUser();
 
   let body: CreateSessionBody = {};
@@ -25,10 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const topic = body.topic?.trim();
-  if (!topic) {
-    return NextResponse.json({ error: "topic is required" }, { status: 400 });
-  }
+  const topic = body.topic?.trim() || "Drawing practice";
 
   const session = createDrawingSession({
     sessionId: body.sessionId?.trim(),

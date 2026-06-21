@@ -8,8 +8,8 @@ Required Agent Secrets:
   DRAWING_APP_URL          — e.g. https://your-app.vercel.app  (no trailing slash)
   AGENT_API_SECRET         — must match AGENT_COURSE_API_SECRET (or LISTINGS_API_SECRET) on Vercel
 
-Legacy secret names still work:
-  APP_BASE_URL / COURSE_API_URL + AGENT_COURSE_API_SECRET
+Legacy env names still work:
+  APP_BASE_URL + LISTINGS_API_SECRET
 """
 
 from __future__ import annotations
@@ -79,10 +79,6 @@ def get_app_base_url() -> str | None:
         if value:
             return value
 
-    course_url = os.environ.get("COURSE_API_URL", "").strip().rstrip("/")
-    if course_url.endswith("/api/course"):
-        return course_url.rsplit("/api/course", 1)[0]
-
     legacy = os.environ.get("MARKETPLACE_API_URL", "").strip().rstrip("/")
     if legacy:
         return legacy.split("/api/")[0]
@@ -128,12 +124,31 @@ def is_diagram_request(message: str) -> bool:
     return True
 
 
-def config_status_message() -> str:
+def check_backend_health(ctx: Context) -> str:
+    base = get_app_base_url()
+    if not base:
+        return "Backend: not configured (set DRAWING_APP_URL)"
+
+    try:
+        response = requests.get(f"{base}/api/drawing/health", timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        vision = "yes" if data.get("visionConfigured") else "no"
+        secret = "yes" if data.get("agentSecretConfigured") else "no"
+        return f"Backend: ok (vision={vision}, agentSecret={secret})"
+    except requests.RequestException as error:
+        ctx.logger.warning(f"Health check failed: {error}")
+        return f"Backend: unreachable ({error})"
+
+
+def config_status_message(ctx: Context | None = None) -> str:
+    backend = check_backend_health(ctx) if ctx else "Backend: (ping from agent chat to verify)"
     return "\n".join(
         [
             "Diagram Drawing Coach is online.",
             f"App URL: {'configured' if get_app_base_url() else 'MISSING — set DRAWING_APP_URL'}",
-            f"API secret: {'configured' if get_agent_api_secret() else 'MISSING — set AGENT_API_SECRET'}",
+            f"Agent secret: {'configured' if get_agent_api_secret() else 'MISSING — set AGENT_API_SECRET'}",
+            backend,
         ]
     )
 
@@ -199,14 +214,14 @@ async def start_drawing_coach(ctx: Context, sender: str, topic: str) -> None:
         reply = (
             "I couldn't start a drawing session. On Agentverse set:\n"
             "• `DRAWING_APP_URL` → your Vercel app URL\n"
-            "• `AGENT_API_SECRET` → same value as on Vercel (`AGENT_COURSE_API_SECRET`)"
+            "• `AGENT_API_SECRET` → same value as on Vercel"
         )
     await ctx.send(sender, text_message(reply))
 
 
 @agent.on_event("startup")
 async def on_startup(ctx: Context):
-    ctx.logger.info(config_status_message())
+    ctx.logger.info(config_status_message(ctx))
 
 
 @protocol.on_message(ChatMessage)
@@ -248,7 +263,7 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
             return
 
         if message.lower() in {"ping", "health", "status"}:
-            await ctx.send(sender, text_message(config_status_message()))
+            await ctx.send(sender, text_message(config_status_message(ctx)))
             return
 
         if not is_diagram_request(message):

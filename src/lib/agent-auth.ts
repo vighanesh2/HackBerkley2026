@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
-export function getAgentCourseApiSecret(): string | null {
+/** Shared secret for Agentverse → Next.js API calls. */
+export function getAgentApiSecret(): string | null {
   const secret =
     process.env.AGENT_API_SECRET?.trim() ||
     process.env.AGENT_COURSE_API_SECRET?.trim() ||
@@ -8,8 +9,8 @@ export function getAgentCourseApiSecret(): string | null {
   return secret || null;
 }
 
-export function isAgentCourseRequest(request: NextRequest): boolean {
-  const secret = getAgentCourseApiSecret();
+export function isAgentRequest(request: NextRequest): boolean {
+  const secret = getAgentApiSecret();
   if (!secret) return false;
 
   const header =

@@ -269,22 +269,6 @@ body {
   }
 }
 
-/* Course generation loader */
-.course-gen-ring {
-  animation: course-gen-spin 1.4s linear infinite;
-}
-
-.course-gen-ring-delay {
-  animation-direction: reverse;
-  animation-duration: 1.8s;
-}
-
-@keyframes course-gen-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* Login sent success */
 .login-sent-icon {
   animation: auth-success-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
