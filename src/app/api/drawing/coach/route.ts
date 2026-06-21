@@ -4,6 +4,7 @@ import {
   getOrCreateDrawingSession,
   getReferenceImageForCoach,
 } from "@/lib/drawing/session-store";
+import { compressCoachContext } from "@/lib/drawing/coach-compression";
 import { analyzeDrawingCoach, isVisionConfigured } from "@/lib/drawing/vision-coach";
 import { buildCoachSpoken } from "@/lib/drawing/coach-prompt";
 
@@ -57,18 +58,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const recentTips = session.coachHistory
-      .slice(-4)
+    const historyTips = session.coachHistory
       .map((entry) => entry.tip.tip)
       .filter(Boolean);
+    const recentTips = historyTips.slice(-4);
+
+    const compression = await compressCoachContext({
+      topic: session.topic,
+      recentTips: historyTips,
+      transcript: body.transcript,
+    });
 
     const tip = await analyzeDrawingCoach({
       topic: session.topic,
       referenceImage,
       canvasImage: canvasImageBase64,
-      transcript: body.transcript,
+      transcript: compression.compressedTranscript || body.transcript,
       trigger,
-      recentTips,
+      recentTips: compression.compressedTips.slice(-4),
     });
 
     appendCoachHistory(sessionId, {
@@ -88,6 +95,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       tip,
       spoken,
+      compression: {
+        telemetry: compression.telemetry,
+        comparison: compression.comparison,
+        activeMode: compression.activeMode,
+        at: new Date().toISOString(),
+      },
     });
   } catch (error) {
     console.error("[drawing-coach] failed:", error);

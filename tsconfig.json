@@ -30,5 +30,17 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "sell-anything"]
+  "exclude": [
+    "node_modules",
+    "sell-anything",
+    "src/token_compression/**/*.test.ts",
+    "src/token_compression/runBenchmark.ts",
+    "src/token_compression/runner.ts",
+    "src/token_compression/verifyTokenCompany.ts",
+    "src/token_compression/mockClients.ts",
+    "src/token_compression/openAIClients.ts",
+    "src/token_compression/prompts.ts",
+    "src/token_compression/sessions.ts",
+    "src/token_compression/loadDotEnv.ts"
+  ]
 }

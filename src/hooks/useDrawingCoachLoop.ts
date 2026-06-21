@@ -13,6 +13,7 @@ import {
   stopSpeaking,
 } from "@/lib/drawing/voice-client";
 import type { CoachTip } from "@/types/drawing";
+import type { CompressionSnapshot } from "@/types/compression";
 
 type CoachTrigger = "manual" | "hint";
 
@@ -44,6 +45,8 @@ export function useDrawingCoachLoop({
   const [lastTip, setLastTip] = useState<CoachTip | null>(null);
   const [lastSpoken, setLastSpoken] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [compressionLatest, setCompressionLatest] = useState<CompressionSnapshot | null>(null);
+  const [compressionHistory, setCompressionHistory] = useState<CompressionSnapshot[]>([]);
 
   const speak = useCallback(
     (text: string) => {
@@ -118,6 +121,7 @@ export function useDrawingCoachLoop({
           tip?: CoachTip;
           spoken?: string;
           error?: string;
+          compression?: CompressionSnapshot;
         };
 
         if (!response.ok) {
@@ -132,6 +136,10 @@ export function useDrawingCoachLoop({
         if (data.spoken) {
           setLastSpoken(data.spoken);
           speak(data.spoken);
+        }
+        if (data.compression) {
+          setCompressionLatest(data.compression);
+          setCompressionHistory((previous) => [...previous, data.compression!].slice(-24));
         }
       } catch (coachError) {
         setError(coachError instanceof Error ? coachError.message : "Coach unavailable");
@@ -242,6 +250,8 @@ export function useDrawingCoachLoop({
     lastTip,
     lastSpoken,
     error,
+    compressionLatest,
+    compressionHistory,
     onEditorReady,
     toggleListening,
     toggleMute,

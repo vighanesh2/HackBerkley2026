@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import CoachDock from "@/components/drawing/CoachDock";
 import DrawingCanvas from "@/components/drawing/DrawingCanvas";
+import TokenCompressionPanel from "@/components/drawing/TokenCompressionPanel";
 import { useDrawingCoachLoop } from "@/hooks/useDrawingCoachLoop";
 import type { DrawingSessionPublicView } from "@/types/drawing";
 
@@ -138,16 +139,23 @@ export default function DrawingCoachWorkspace({
           </div>
         )}
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-neutral-800">Your canvas</h2>
-          <div className="relative h-[min(60vh,640px)] min-h-[420px]">
-            <DrawingCanvas
-              ghostImageUrl={coach.ghostImageUrl}
-              showGhostOverlay={coach.showGhost}
-              guiding={Boolean(coach.lastTip)}
-              onEditorReady={coach.onEditorReady}
-            />
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-neutral-800">Your canvas</h2>
+            <div className="relative h-[min(60vh,640px)] min-h-[420px]">
+              <DrawingCanvas
+                ghostImageUrl={coach.ghostImageUrl}
+                showGhostOverlay={coach.showGhost}
+                guiding={Boolean(coach.lastTip)}
+                onEditorReady={coach.onEditorReady}
+              />
+            </div>
           </div>
+
+          <TokenCompressionPanel
+            latest={coach.compressionLatest}
+            history={coach.compressionHistory}
+          />
         </section>
       </div>
 
