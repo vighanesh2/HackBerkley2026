@@ -54,7 +54,12 @@ Should return `"publishedToShopify": true` and a `shopifyUrl`.
 
 ---
 
-## Step 2 — Deploy agent on Agentverse
+## Step 2 — Deploy agent on Agentverse (Hosted — recommended for hackathon)
+
+**You do NOT need `register_chat_agent` for hosted agents.**  
+That script is only for external agents running on Render/your laptop with a mailbox.
+
+### Hosted agent (paste & run)
 
 1. Go to **[agentverse.ai](https://agentverse.ai)** → sign in
 2. **+ Launch an Agent** → blank script
@@ -65,10 +70,28 @@ Should return `"publishedToShopify": true` and a `shopifyUrl`.
 | Secret | Value |
 |--------|--------|
 | `ASI_API_KEY` | from [asi1.ai/dashboard/api-keys](https://asi1.ai/dashboard/api-keys) |
-| `MARKETPLACE_API_URL` | `https://your-app.vercel.app/api/listings` |
+| `MARKETPLACE_API_URL` | `https://hack-berkley2026.vercel.app/api/listings` |
 | `LISTINGS_API_SECRET` | same as Vercel |
 
 6. Click **Run** — agent should show as active in Almanac
+
+### External agent (optional — uses `register_chat_agent`)
+
+Only if you run the agent outside Agentverse (Render, local + mailbox):
+
+| Variable | Purpose |
+|----------|---------|
+| `AGENTVERSE_KEY` | API key from Agentverse profile |
+| `AGENT_SEED_PHRASE` | unique seed for your agent |
+| `AGENT_ENDPOINT` | **mailbox URL from Agent Inspector** — NOT Vercel |
+| `MARKETPLACE_API_URL` | `https://hack-berkley2026.vercel.app/api/listings` |
+
+```bash
+python agent/register_external.py
+```
+
+**Common mistake:** passing `https://hack-berkley2026.vercel.app/` as the registration endpoint.  
+That URL is your **Shopify backend**, not the agent. The agent endpoint comes from Agent Inspector after starting a mailbox agent.
 
 ---
 
