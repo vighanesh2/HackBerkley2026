@@ -27,6 +27,7 @@ from uagents_core.contrib.protocols.chat import (
     ChatAcknowledgement,
     ChatMessage,
     EndSessionContent,
+    StartSessionContent,
     TextContent,
     chat_protocol_spec,
 )
@@ -35,7 +36,6 @@ agent = Agent()
 protocol = Protocol(spec=chat_protocol_spec)
 
 AGENTVERSE_SEARCH_URL = "https://agentverse.ai/v1/search/agents"
-AGENT_ADDRESS_PATTERN = re.compile(r"^agent1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{59}$")
 
 URL_PATTERN = re.compile(
     r"https?://(?:www\.)?(?:youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|"
@@ -76,11 +76,32 @@ def split_topic_and_notes(message: str) -> tuple[str, str | None]:
     return (topic or message, notes or None)
 
 
+def extract_user_text(msg: ChatMessage) -> str:
+    """ASI:One sends user messages from agent addresses — never filter those out."""
+    if hasattr(msg, "text") and callable(msg.text):
+        try:
+            text = str(msg.text() or "").strip()
+            if text:
+                return normalize_message(text)
+        except Exception:
+            pass
+
+    parts: list[str] = []
+    for item in msg.content:
+        if isinstance(item, TextContent):
+            parts.append(item.text)
+    return normalize_message("\n".join(parts))
+
+
 def normalize_message(text: str) -> str:
     message = text.strip()
     message = re.sub(r"^@\S+\s*", "", message)
     message = re.sub(r"\s+@\S+\s*", " ", message)
     return message.strip()
+
+
+def is_session_start(msg: ChatMessage) -> bool:
+    return any(isinstance(item, StartSessionContent) for item in msg.content)
 
 
 def is_likely_topic_request(message: str) -> bool:
@@ -479,8 +500,7 @@ async def on_startup(ctx: Context):
 
 @protocol.on_message(ChatMessage)
 async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
-    if AGENT_ADDRESS_PATTERN.match(sender):
-        return
+    ctx.logger.info(f"ChatMessage from {sender}")
 
     await ctx.send(
         sender,
@@ -490,14 +510,19 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
         ),
     )
 
-    text = ""
-    for item in msg.content:
-        if isinstance(item, TextContent):
-            text += item.text
-
-    message = normalize_message(text)
+    message = extract_user_text(msg)
 
     try:
+        if not message and is_session_start(msg):
+            await ctx.send(
+                sender,
+                text_message(
+                    "Hi! What would you like to learn? Example: "
+                    "\"I want to learn Python basics\""
+                ),
+            )
+            return
+
         if not message:
             reply = (
                 "What would you like to learn? I'll build a course (with RAG if you add "
