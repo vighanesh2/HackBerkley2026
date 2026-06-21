@@ -202,8 +202,10 @@ def call_create_drawing_session(ctx: Context, sender: str, topic: str) -> str | 
 async def start_drawing_coach(ctx: Context, sender: str, topic: str) -> None:
     url = await asyncio.to_thread(call_create_drawing_session, ctx, sender, topic)
     if url:
+        if url.startswith("http://localhost") or url.startswith("https://localhost"):
+            ctx.logger.warning(f"Session URL points to localhost: {url}")
         reply = (
-            f"Your **Diagram Drawing Coach** session is ready for: _{topic}_\n\n"
+            f"Your **Diagram Drawing Coach** session is ready.\n\n"
             f"**Open this link:** {url}\n\n"
             "1. Upload the reference diagram you want to learn\n"
             "2. Click **Check my drawing** for step-by-step guidance\n"
@@ -212,9 +214,11 @@ async def start_drawing_coach(ctx: Context, sender: str, topic: str) -> None:
         )
     else:
         reply = (
-            "I couldn't start a drawing session. On Agentverse set:\n"
-            "• `DRAWING_APP_URL` → your Vercel app URL\n"
-            "• `AGENT_API_SECRET` → same value as on Vercel"
+            "I couldn't start a drawing session. Check Agentverse secrets and Vercel env:\n"
+            "• `DRAWING_APP_URL` → your Vercel URL (e.g. https://hack-berkley2026.vercel.app)\n"
+            "• `AGENT_API_SECRET` → same value as `AGENT_API_SECRET` or `LISTINGS_API_SECRET` on Vercel\n"
+            "• On Vercel set `NEXT_PUBLIC_APP_URL` to your production URL (not localhost)\n\n"
+            "Send `ping` to verify backend health."
         )
     await ctx.send(sender, text_message(reply))
 
@@ -278,11 +282,7 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
             return
 
         topic = diagram_topic_from_message(message)
-        await ctx.send(
-            sender,
-            text_message(f"Setting up your drawing coach for **{topic}**…"),
-        )
-        asyncio.create_task(start_drawing_coach(ctx, sender, topic))
+        await start_drawing_coach(ctx, sender, topic)
     except Exception as error:
         ctx.logger.exception("Unhandled drawing agent error")
         await ctx.send(
