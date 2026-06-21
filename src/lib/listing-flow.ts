@@ -34,6 +34,30 @@ export function parsePrice(text: string): number | null {
   return Number.parseFloat(match[1]);
 }
 
+export function normalizeMessage(text: string): string {
+  return text
+    .trim()
+    .replace(/^@\S+\s*/, "")
+    .replace(/\s+@\S+\s*/g, " ")
+    .trim();
+}
+
+function isAffirmative(text: string): boolean {
+  const lower = normalizeMessage(text).toLowerCase();
+  if (["yes", "y", "confirm", "post", "post it", "yeah", "yep", "sure", "ok", "okay"].includes(lower)) {
+    return true;
+  }
+  return lower.split(/\s+/).some((w) => ["yes", "y", "yeah", "yep", "sure", "confirm", "post"].includes(w));
+}
+
+function isNegative(text: string): boolean {
+  const lower = normalizeMessage(text).toLowerCase();
+  if (["no", "n", "cancel", "stop", "nope"].includes(lower)) {
+    return true;
+  }
+  return lower.split(/\s+/).some((w) => ["no", "n", "cancel", "nope", "stop"].includes(w));
+}
+
 export function wantsToList(text: string): boolean {
   const normalized = text.toLowerCase();
   return (
@@ -60,12 +84,12 @@ export function processListingMessage(
   sessionId: string,
   message: string,
 ): { reply: string; readyToPost: boolean; draft?: ListingDraft } {
-  const text = message.trim();
+  const text = normalizeMessage(message);
   const lower = text.toLowerCase();
   const session = getSession(sessionId);
 
   if (session.step === "confirm") {
-    if (["yes", "y", "confirm", "post it", "post"].includes(lower)) {
+    if (isAffirmative(message)) {
       const draft = session.draft as Required<ListingDraft>;
       clearSession(sessionId);
       return {
@@ -75,7 +99,7 @@ export function processListingMessage(
       };
     }
 
-    if (["no", "n", "cancel"].includes(lower)) {
+    if (isNegative(message)) {
       clearSession(sessionId);
       return {
         reply: "Listing cancelled. Say \"list item\" whenever you want to try again.",

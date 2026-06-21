@@ -57,6 +57,28 @@ def parse_price(text: str) -> float | None:
     return float(found.group(1))
 
 
+def normalize_message(text: str) -> str:
+    """Strip @mentions — ASI:One sends messages like '@sellanything yes'."""
+    message = text.strip()
+    message = re.sub(r"^@\S+\s*", "", message)
+    message = re.sub(r"\s+@\S+\s*", " ", message)
+    return message.strip()
+
+
+def is_affirmative(text: str) -> bool:
+    lower = normalize_message(text).lower()
+    if lower in {"yes", "y", "confirm", "post", "post it", "yeah", "yep", "sure", "ok", "okay"}:
+        return True
+    return any(w in {"yes", "y", "yeah", "yep", "sure", "confirm", "post"} for w in lower.split())
+
+
+def is_negative(text: str) -> bool:
+    lower = normalize_message(text).lower()
+    if lower in {"no", "n", "cancel", "stop", "nope"}:
+        return True
+    return any(w in {"no", "n", "cancel", "nope", "stop"} for w in lower.split())
+
+
 def wants_to_list(text: str) -> bool:
     lower = text.lower()
     return any(
@@ -126,8 +148,17 @@ def extract_listing_from_message(text: str) -> dict | None:
         return None
 
 
+def get_listings_api_url() -> str | None:
+    api_url = os.environ.get("MARKETPLACE_API_URL", "").strip().rstrip("/")
+    if not api_url:
+        return None
+    if not api_url.endswith("/api/listings"):
+        api_url = f"{api_url}/api/listings"
+    return api_url
+
+
 def post_listing(ctx: Context, draft: dict, seller_id: str) -> str:
-    api_url = os.environ.get("MARKETPLACE_API_URL")
+    api_url = get_listings_api_url()
     secret = os.environ.get("LISTINGS_API_SECRET")
 
     if not api_url:
@@ -171,14 +202,14 @@ def post_listing(ctx: Context, draft: dict, seller_id: str) -> str:
 
 
 def process_message(ctx: Context, sender: str, text: str) -> str:
-    message = text.strip()
+    message = normalize_message(text)
     lower = message.lower()
     session = get_session(ctx, sender)
     step = session.get("step", "idle")
     draft = session.get("draft", {})
 
     if step == "confirm":
-        if lower in {"yes", "y", "confirm", "post", "post it"}:
+        if is_affirmative(message):
             required = ("title", "description", "price", "category")
             if not all(draft.get(field) for field in required):
                 clear_session(ctx, sender)
@@ -188,7 +219,7 @@ def process_message(ctx: Context, sender: str, text: str) -> str:
             clear_session(ctx, sender)
             return reply
 
-        if lower in {"no", "n", "cancel"}:
+        if is_negative(message):
             clear_session(ctx, sender)
             return 'Listing cancelled. Say "list item" whenever you want to try again.'
 

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   let body: {
     title?: string;
     description?: string;
-    price?: number;
+    price?: number | string;
     category?: string;
     condition?: string;
     location?: string;
@@ -28,7 +28,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { title, description, price, category, condition, location, sellerId } = body;
+  const { title, description, category, condition, location, sellerId } = body;
+  const price =
+    typeof body.price === "number"
+      ? body.price
+      : typeof body.price === "string"
+        ? Number.parseFloat(body.price)
+        : Number.NaN;
 
   if (!title?.trim() || !description?.trim() || !category?.trim()) {
     return NextResponse.json(
@@ -37,44 +43,49 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (typeof price !== "number" || Number.isNaN(price) || price < 0) {
+  if (Number.isNaN(price) || price < 0) {
     return NextResponse.json(
       { error: "price must be a non-negative number" },
       { status: 400 },
     );
   }
 
-  const { listing, shopifyUrl, shopifyAdminUrl, publishedToShopify } =
-    await createListing({
-      title,
-      description,
-      price,
-      category,
-      condition,
-      location,
-      sellerId,
-    });
+  try {
+    const { listing, shopifyUrl, shopifyAdminUrl, publishedToShopify } =
+      await createListing({
+        title,
+        description,
+        price,
+        category,
+        condition,
+        location,
+        sellerId,
+      });
 
-  if (!publishedToShopify) {
+    if (!publishedToShopify) {
+      return NextResponse.json(
+        {
+          listing,
+          publishedToShopify: false,
+          error: listing.shopifyError ?? "Could not publish to Shopify",
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json(
       {
         listing,
-        publishedToShopify: false,
-        error: listing.shopifyError ?? "Could not publish to Shopify",
+        url: shopifyUrl,
+        shopifyUrl,
+        shopifyAdminUrl,
+        publishedToShopify: true,
+        message: `Live on Shopify: ${shopifyUrl}`,
       },
-      { status: 502 },
+      { status: 201 },
     );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json(
-    {
-      listing,
-      url: shopifyUrl,
-      shopifyUrl,
-      shopifyAdminUrl,
-      publishedToShopify: true,
-      message: `Live on Shopify: ${shopifyUrl}`,
-    },
-    { status: 201 },
-  );
 }

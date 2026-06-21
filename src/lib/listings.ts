@@ -4,8 +4,18 @@ import { randomUUID } from "crypto";
 import { isShopifyConfigured, publishProductToShopify } from "@/lib/shopify";
 import type { CreateListingInput, Listing } from "@/types/listing";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "listings.json");
+function getDataFile(): string {
+  if (process.env.VERCEL) {
+    return path.join("/tmp", "listings.json");
+  }
+  return path.join(process.cwd(), "data", "listings.json");
+}
+
+function getBundledDataFile(): string {
+  return path.join(process.cwd(), "data", "listings.json");
+}
+
+let memoryListings: Listing[] | null = null;
 
 function normalizeListing(raw: Partial<Listing> & Pick<Listing, "id">): Listing {
   return {
@@ -28,23 +38,50 @@ function normalizeListing(raw: Partial<Listing> & Pick<Listing, "id">): Listing 
   };
 }
 
-async function ensureDataFile(): Promise<Listing[]> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-
+async function readListingsFromFile(filePath: string): Promise<Listing[] | null> {
   try {
-    const raw = await fs.readFile(DATA_FILE, "utf-8");
+    const raw = await fs.readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw) as Partial<Listing>[];
     return parsed.map((item) => normalizeListing(item as Listing));
   } catch {
-    const empty: Listing[] = [];
-    await fs.writeFile(DATA_FILE, JSON.stringify(empty, null, 2));
-    return empty;
+    return null;
   }
 }
 
+async function ensureDataFile(): Promise<Listing[]> {
+  if (memoryListings) {
+    return memoryListings;
+  }
+
+  const dataFile = getDataFile();
+  const fromPrimary = await readListingsFromFile(dataFile);
+  if (fromPrimary) {
+    memoryListings = fromPrimary;
+    return fromPrimary;
+  }
+
+  if (process.env.VERCEL) {
+    const fromBundled = await readListingsFromFile(getBundledDataFile());
+    if (fromBundled) {
+      memoryListings = fromBundled;
+      return fromBundled;
+    }
+  }
+
+  memoryListings = [];
+  return memoryListings;
+}
+
 async function writeListings(listings: Listing[]): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(DATA_FILE, JSON.stringify(listings, null, 2));
+  memoryListings = listings;
+
+  const dataFile = getDataFile();
+  try {
+    await fs.mkdir(path.dirname(dataFile), { recursive: true });
+    await fs.writeFile(dataFile, JSON.stringify(listings, null, 2));
+  } catch {
+    // Vercel may reject writes outside /tmp; Shopify success matters more than persistence.
+  }
 }
 
 export async function getAllListings(): Promise<Listing[]> {
