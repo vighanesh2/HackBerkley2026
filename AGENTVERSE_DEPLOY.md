@@ -53,6 +53,15 @@ Legacy names `MARKETPLACE_API_URL` and `LISTINGS_API_SECRET` still work.
 
 ## Step 3 — Test on ASI:One
 
+**Full walkthrough:** [agent/ASI_ONE_SETUP.md](./agent/ASI_ONE_SETUP.md)
+
+### Make it discoverable
+
+1. In Agentverse agent **Profile**, set handle: `@feynman-coach`
+2. Keep agent status **Active** (click **Run**)
+3. Use keywords at launch: `education`, `tutoring`, `Feynman`
+4. Paste [`agent/AGENTVERSE_README.md`](./agent/AGENTVERSE_README.md) in the README tab
+
 ### Course mode
 
 1. Open [asi1.ai](https://asi1.ai) → **Agents** toggle on
@@ -68,6 +77,17 @@ Legacy names `MARKETPLACE_API_URL` and `LISTINGS_API_SECRET` still work.
 4. Allow microphone — the AI coach compares your canvas to the reference and speaks tips
 
 Requires `VISION_API_KEY` on Vercel. Works best in **Chrome** (continuous speech recognition).
+
+## Diagram Drawing Coach agent (separate)
+
+For a **dedicated ASI:One agent** that only handles diagram drawing (not full courses), deploy **`agent/drawing_agent.py`** — see [agent/DRAWING_ASI_ONE_SETUP.md](./agent/DRAWING_ASI_ONE_SETUP.md).
+
+| Agentverse secret | Value |
+|-------------------|--------|
+| `DRAWING_APP_URL` | `https://your-app.vercel.app` |
+| `AGENT_API_SECRET` | same as `AGENT_COURSE_API_SECRET` on Vercel |
+
+Suggested handle: `@diagram-coach`
 
 ### Optional: RAG notes via agent chat
 

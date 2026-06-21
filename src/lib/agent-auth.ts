@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 export function getAgentCourseApiSecret(): string | null {
   const secret =
+    process.env.AGENT_API_SECRET?.trim() ||
     process.env.AGENT_COURSE_API_SECRET?.trim() ||
     process.env.LISTINGS_API_SECRET?.trim();
   return secret || null;

@@ -1,66 +1,78 @@
 # Feynman Course Agent
 
-An autonomous AI agent discoverable on **ASI:One** that **generates personalized courses** and teaches using the **Feynman Learning Technique** — not just answering questions, but guiding real understanding.
+An autonomous AI tutor **discoverable on ASI:One** that builds personalized courses and teaches using the **Feynman Learning Technique** — explain simply, challenge you to teach it back, find gaps, and re-teach until you master each module.
 
-## Problem solved
+Also includes a **Drawing Coach**: upload a reference diagram, draw on a live canvas, and get step-by-step voice + visual guidance with a shadow reference overlay.
 
-Most AI tutors dump information. People think they understand until they try to explain it. **Feynman Course Agent** builds a structured course from your goal, teaches each module in plain language, then makes you explain it back — and closes the gaps until you actually get it.
+## What this agent does
 
-## What this agent does (real actions)
-
-1. **Generates a course outline** from your topic (4–6 modules, foundations → application)
-2. **Finds the best videos** by searching Agentverse and messaging specialist video agents
-3. **Drawing Coach** — agent creates a canvas session; vision + voice guides you while you draw a reference diagram
-4. **Teaches simply** — Feynman-style explanations with analogies and examples
-5. **Challenges you** — explain the module in your own words
-6. **Evaluates understanding** — structured gap analysis via LLM
-7. **Remediates** — re-teaches weak spots until you pass
-8. **Advances module-by-module** until the course is complete
+1. **Generates course outlines** from your learning goal (4–6 modules)
+2. **Finds educational videos** by searching Agentverse and messaging video specialist agents
+3. **Teaches each module** in plain language with analogies and examples
+4. **Challenges you** to explain concepts in your own words (Feynman Technique)
+5. **Evaluates understanding** and identifies knowledge gaps
+6. **Re-teaches weak spots** until you pass each module
+7. **Drawing Coach** — creates a canvas session link for learning diagrams (circuits, neural networks, flowcharts)
 
 ## Example prompts (try on ASI:One)
 
+**Courses:**
 - "I want to learn linear algebra for machine learning"
 - "Build me a course on the French Revolution"
 - "Help me understand how neural networks work"
-- "Teach me to draw a circuit diagram"
-- "I want to learn how to sketch a flowchart"
-- "Prepare me for AP Biology unit on genetics"
+- "Prepare me for AP Biology — genetics unit"
+
+**Drawing Coach:**
+- "Teach me to draw an electrical circuit diagram"
+- "Help me sketch a neural network diagram"
+- "I want to learn how to draw a flowchart"
+
+**With your own notes (RAG):**
+```
+I want to learn thermodynamics
+--- notes ---
+(paste your textbook excerpt or study notes here)
+```
 
 ## Keywords for discovery
 
-learn, course, education, tutoring, Feynman technique, study agent, personalized learning, explain like I'm five, mastery learning, AI teacher, curriculum generator, video recommendation, youtube, ASI agent
+education, tutoring, Feynman technique, learn, course, study agent, personalized learning, AI teacher, curriculum, mastery learning, explain like I'm five, drawing coach, diagram, sketch, electrical circuit, neural network, flowchart, vision coach, ASI agent, Agentverse
+
+## Handle
+
+`@feynman-coach`
 
 ## Architecture
 
 ```
 User (ASI:One Chat)
-    → Agentverse Hosted Agent (ACP)
-        → Agentverse Search API (find video specialist agents)
-        → Agent-to-agent chat (request best YouTube/video links)
-        → Next.js API (/api/course) + X-Agent-Api-Key
-            → LangGraph Feynman state machine + RAG on uploaded notes
-                → ASI-1 (outline, teach, evaluate)
+    → Feynman Course Agent (Agentverse hosted, Chat Protocol)
+        → Agentverse Search → video specialist agents (agent-to-agent)
+        → Next.js API (/api/course, /api/drawing) + LangGraph + ASI-1
+            → Feynman teach → challenge → evaluate → remediate loop
+            → Vision drawing coach with shadow reference guide
 ```
-
-Web app users hit the same API after Supabase login and get cloud library saves.
 
 ## Tech stack
 
 - **Agentverse** — hosted uAgent with Agent Chat Protocol (ASI:One compatible)
-- **LangGraph** — orchestrates outline → teach → challenge → evaluate → remediate loop
-- **ASI-1** — course generation and tutoring intelligence
-- **Next.js** — secure API layer on Vercel
+- **LangGraph** — multi-step Feynman tutoring state machine
+- **ASI-1** — course generation and evaluation
+- **Vision LLM** — drawing coach compares canvas to reference diagram
+- **Next.js on Vercel** — secure API backend
 
 ## Ideal users
 
 - Students preparing for exams
-- Professionals upskilling in a new domain
+- Professionals upskilling in a new field
+- Visual learners practicing technical diagrams
 - Anyone who wants to *understand*, not memorize
 
-## Demo flow for judges
+## Quick test
 
-1. Open ASI:One → enable **Agents** toggle
-2. Search: *"agent that teaches using Feynman technique"*
+1. Open [asi1.ai](https://asi1.ai) → enable **Agents** toggle
+2. Search: *"Feynman course agent"* or message `@feynman-coach`
 3. Say: *"I want to learn basic cryptography"*
-4. Confirm the outline → read the lesson → explain it back
-5. Watch the agent identify gaps and re-teach until you master each module
+4. Confirm outline → read lesson → explain it back → watch gap remediation
+
+For drawing: *"Teach me to draw an electrical circuit"* → open the canvas link → upload reference → click **Check my drawing**.

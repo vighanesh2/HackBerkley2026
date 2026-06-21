@@ -612,8 +612,10 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
             await ctx.send(
                 sender,
                 text_message(
-                    "Hi! What would you like to learn? Example: "
-                    "\"I want to learn Python basics\""
+                    "Hi! I'm the Feynman Course Agent — discoverable on ASI:One.\n\n"
+                    "Tell me what you want to learn and I'll build a course using the Feynman Technique. "
+                    "Or say *\"teach me to draw a circuit diagram\"* for the Drawing Coach.\n\n"
+                    "Example: \"I want to learn Python basics\""
                 ),
             )
             return
