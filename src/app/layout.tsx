@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import AppHeader from "@/components/AppHeader";
+import { AuthProvider } from "@/components/AuthProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SellAnything",
-  description: "AI agent that sells for you via ASI:One and Agentverse",
+  title: "Feynman Course Agent",
+  description: "AI agent that generates courses and teaches using the Feynman Technique",
 };
 
 export default function RootLayout({
@@ -27,7 +29,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-dvh overflow-x-hidden font-sans">
+        <AuthProvider>
+          <AppHeader />
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   );
 }

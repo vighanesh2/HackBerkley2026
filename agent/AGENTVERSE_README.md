@@ -1,57 +1,61 @@
-# SellAnything — Shopify Commerce Agent
+# Feynman Course Agent
 
-An autonomous AI agent discoverable on **ASI:One** that turns natural language into **live Shopify product listings**. This is not a chatbot — it completes a real e-commerce workflow end to end.
+An autonomous AI agent discoverable on **ASI:One** that **generates personalized courses** and teaches using the **Feynman Learning Technique** — not just answering questions, but guiding real understanding.
 
 ## Problem solved
 
-Selling online is friction-heavy: sellers must write titles, descriptions, set prices, pick categories, and publish manually. **SellAnything** lets a user say *"Sell my road bike for $450"* and the agent handles the rest — collecting missing details, confirming, then **creating a real product on Shopify** via the Admin API.
+Most AI tutors dump information. People think they understand until they try to explain it. **Feynman Course Agent** builds a structured course from your goal, teaches each module in plain language, then makes you explain it back — and closes the gaps until you actually get it.
 
 ## What this agent does (real actions)
 
-1. **Understands intent** — uses ASI-1 to parse free-form selling requests
-2. **Collects product data** — multi-step conversation with persistent state (`ctx.storage`)
-3. **Confirms before acting** — shows a draft summary; user approves with "yes"
-4. **Executes a transaction** — calls a secure backend that runs Shopify `productCreate` + price update
-5. **Returns proof** — live storefront URL + Shopify Admin link
+1. **Generates a course outline** from your topic (4–6 modules, foundations → application)
+2. **Finds the best videos** by searching Agentverse and messaging specialist video agents
+3. **Teaches simply** — Feynman-style explanations with analogies and examples
+3. **Challenges you** — explain the module in your own words
+4. **Evaluates understanding** — structured gap analysis via LLM
+5. **Remediates** — re-teaches weak spots until you pass
+6. **Advances module-by-module** until the course is complete
 
 ## Example prompts (try on ASI:One)
 
-- "I want to sell my road bike for $450"
-- "Help me list a used MacBook on my Shopify store"
-- "Post my IKEA desk — furniture, $80, good condition"
-- "List item"
+- "I want to learn linear algebra for machine learning"
+- "Build me a course on the French Revolution"
+- "Help me understand how neural networks work"
+- "Prepare me for AP Biology unit on genetics"
 
 ## Keywords for discovery
 
-shopify, ecommerce, sell products, list items, online store, commerce agent, product listing, automate selling, ASI agent, marketplace automation, create product, storefront
+learn, course, education, tutoring, Feynman technique, study agent, personalized learning, explain like I'm five, mastery learning, AI teacher, curriculum generator, video recommendation, youtube, ASI agent
 
 ## Architecture
 
 ```
 User (ASI:One Chat)
-    → Agentverse Hosted Agent (ACP + ASI-1)
-        → Next.js API (/api/listings)
-            → Shopify Admin GraphQL API
-                → Live product on merchant store
+    → Agentverse Hosted Agent (ACP)
+        → Agentverse Search API (find video specialist agents)
+        → Agent-to-agent chat (request best YouTube/video links)
+        → Next.js API (/api/course)
+            → LangGraph Feynman state machine
+                → ASI-1 (outline, teach, evaluate)
 ```
 
 ## Tech stack
 
 - **Agentverse** — hosted uAgent with Agent Chat Protocol (ASI:One compatible)
-- **ASI-1** — intent parsing and natural language understanding
-- **Next.js** — secure action layer (Shopify credentials never exposed to chat)
-- **Shopify Admin API** — real product creation
+- **LangGraph** — orchestrates outline → teach → challenge → evaluate → remediate loop
+- **ASI-1** — course generation and tutoring intelligence
+- **Next.js** — secure API layer on Vercel
 
 ## Ideal users
 
-- Small sellers who want to list inventory quickly
-- Hackathon demo: merchant says what to sell → product appears in Shopify Admin in seconds
+- Students preparing for exams
+- Professionals upskilling in a new domain
+- Anyone who wants to *understand*, not memorize
 
 ## Demo flow for judges
 
 1. Open ASI:One → enable **Agents** toggle
-2. Search: *"agent that posts products to Shopify"*
-3. Chat with **SellAnything**
-4. Say: *"Sell my vintage camera for $120"*
-5. Confirm with *"yes"*
-6. Open the returned Shopify Admin link — product is live
+2. Search: *"agent that teaches using Feynman technique"*
+3. Say: *"I want to learn basic cryptography"*
+4. Confirm the outline → read the lesson → explain it back
+5. Watch the agent identify gaps and re-teach until you master each module

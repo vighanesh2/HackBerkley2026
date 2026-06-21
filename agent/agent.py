@@ -1,30 +1,30 @@
 """
-Marketplace Listing Agent — deploy on Agentverse as a Hosted Agent.
+Feynman Course Agent — deploy on Agentverse as a Hosted Agent.
 
-Required Agent Secrets (Agentverse editor → Secrets):
-  ASI_API_KEY            — from https://asi1.ai/dashboard/api-keys
-  MARKETPLACE_API_URL    — e.g. https://your-app.vercel.app/api/listings
-  LISTINGS_API_SECRET    — same value as in your Next.js .env.local
+Required Agent Secrets:
+  MARKETPLACE_API_URL    — e.g. https://your-app.vercel.app/api/course
+  AGENTVERSE_API_KEY     — for searching & messaging video specialist agents
+  ASI_API_KEY            — only if the backend URL is not configured (fallback chat)
 
-Optional:
-  NEXT_PUBLIC_APP_URL    — base URL for listing links (defaults to MARKETPLACE_API_URL origin)
+The hosted backend runs LangGraph + ASI-1 for course generation and Feynman tutoring.
+This agent also queries other Agentverse agents to find the best related videos.
 """
 
-import json
+from __future__ import annotations
+
+import asyncio
 import os
 import re
 from datetime import datetime, timezone
-from urllib.parse import quote
+from typing import Any
 from uuid import uuid4
 
 import requests
-from openai import OpenAI
 from uagents import Agent, Context, Protocol
 from uagents_core.contrib.protocols.chat import (
     ChatAcknowledgement,
     ChatMessage,
     EndSessionContent,
-    MetadataContent,
     TextContent,
     chat_protocol_spec,
 )
@@ -32,175 +32,275 @@ from uagents_core.contrib.protocols.chat import (
 agent = Agent()
 protocol = Protocol(spec=chat_protocol_spec)
 
-STEPS = ("idle", "title", "description", "price", "category", "confirm")
+AGENTVERSE_SEARCH_URL = "https://agentverse.ai/v1/search/agents"
+AGENT_ADDRESS_PATTERN = re.compile(r"^agent1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{59}$")
+
+URL_PATTERN = re.compile(
+    r"https?://(?:www\.)?(?:youtube\.com/watch\?v=[\w-]+|youtu\.be/[\w-]+|"
+    r"vimeo\.com/\d+|[\w.-]+\.(?:edu|org|com)/[^\s\])\"']+)",
+    re.IGNORECASE,
+)
+TITLE_URL_PATTERN = re.compile(
+    r"(.+?)\s*\|\s*(https?://\S+)\s*\|\s*(.+)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+SHORT_REPLIES = {
+    "yes",
+    "no",
+    "y",
+    "n",
+    "yeah",
+    "yep",
+    "ok",
+    "okay",
+    "continue",
+    "start",
+    "next",
+    "go",
+    "sure",
+}
 
 
-def storage_key(sender: str) -> str:
-    return f"listing:{sender}"
+NOTES_MARKER = re.compile(r"(?:^|\n)---\s*notes\s*---\s*\n", re.IGNORECASE)
 
 
-def get_session(ctx: Context, sender: str) -> dict:
-    return ctx.storage.get(storage_key(sender)) or {"step": "idle", "draft": {}}
-
-
-def save_session(ctx: Context, sender: str, session: dict) -> None:
-    ctx.storage.set(storage_key(sender), session)
-
-
-def clear_session(ctx: Context, sender: str) -> None:
-    ctx.storage.set(storage_key(sender), None)
-
-
-def add_seller_watch(ctx: Context, sender: str) -> None:
-    watchlist = ctx.storage.get("watchlist") or []
-    if sender not in watchlist:
-        watchlist.append(sender)
-    ctx.storage.set("watchlist", watchlist)
-
-
-def parse_price(text: str) -> float | None:
-    match = re.sub(r",", "", text).replace("$", " ").strip()
-    found = re.search(r"(\d+(?:\.\d{1,2})?)", match)
-    if not found:
-        return None
-    return float(found.group(1))
+def split_topic_and_notes(message: str) -> tuple[str, str | None]:
+    match = NOTES_MARKER.search(message)
+    if not match:
+        return message, None
+    topic = message[: match.start()].strip()
+    notes = message[match.end() :].strip()
+    return (topic or message, notes or None)
 
 
 def normalize_message(text: str) -> str:
-    """Strip @mentions — ASI:One sends messages like '@sellanything yes'."""
     message = text.strip()
     message = re.sub(r"^@\S+\s*", "", message)
     message = re.sub(r"\s+@\S+\s*", " ", message)
     return message.strip()
 
 
-def is_affirmative(text: str) -> bool:
-    lower = normalize_message(text).lower()
-    if lower in {"yes", "y", "confirm", "post", "post it", "yeah", "yep", "sure", "ok", "okay"}:
-        return True
-    return any(w in {"yes", "y", "yeah", "yep", "sure", "confirm", "post"} for w in lower.split())
+def is_likely_topic_request(message: str) -> bool:
+    normalized = message.lower().strip()
+    if normalized in SHORT_REPLIES:
+        return False
+    if len(normalized) < 8:
+        return False
+    return True
 
 
-def is_negative(text: str) -> bool:
-    lower = normalize_message(text).lower()
-    if lower in {"no", "n", "cancel", "stop", "nope"}:
-        return True
-    return any(w in {"no", "n", "cancel", "nope", "stop"} for w in lower.split())
-
-
-def wants_to_list(text: str) -> bool:
-    lower = text.lower()
-    return any(
-        word in lower
-        for word in ("sell", "list", "post", "marketplace", "shopify", "product")
-    )
-
-
-def build_summary(draft: dict) -> str:
-    return (
-        "Here's your listing:\n"
-        f"Title: {draft.get('title')}\n"
-        f"Description: {draft.get('description')}\n"
-        f"Price: ${draft.get('price')}\n"
-        f"Category: {draft.get('category')}\n\n"
-        'Reply "yes" to post or "no" to cancel.'
-    )
-
-
-def get_asi_client() -> OpenAI | None:
-    api_key = os.environ.get("ASI_API_KEY")
-    if not api_key:
-        return None
-    return OpenAI(base_url="https://api.asi1.ai/v1", api_key=api_key)
-
-
-def ask_asi(system_prompt: str, user_prompt: str) -> str | None:
-    client = get_asi_client()
-    if not client:
-        return None
-
-    try:
-        response = client.chat.completions.create(
-            model="asi1-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=512,
-        )
-        content = response.choices[0].message.content
-        return str(content) if content else None
-    except Exception:
-        return None
-
-
-def extract_listing_from_message(text: str) -> dict | None:
-    prompt = (
-        "Extract marketplace listing fields from the user message. "
-        "Return strict JSON with keys: title, description, price, category. "
-        "Use null for missing fields. price must be a number without currency symbol."
-    )
-    raw = ask_asi(prompt, text)
-    if not raw:
-        return None
-
-    try:
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        if start == -1 or end <= start:
-            return None
-        data = json.loads(raw[start:end])
-        if not isinstance(data, dict):
-            return None
-        return data
-    except json.JSONDecodeError:
-        return None
-
-
-def get_listings_api_url() -> str | None:
+def get_course_api_url() -> str | None:
     api_url = os.environ.get("MARKETPLACE_API_URL", "").strip().rstrip("/")
     if not api_url:
         return None
-    if not api_url.endswith("/api/listings"):
-        api_url = f"{api_url}/api/listings"
+    if not api_url.endswith("/api/course"):
+        if api_url.endswith("/api/listings"):
+            api_url = api_url.replace("/api/listings", "/api/course")
+        else:
+            api_url = f"{api_url}/api/course"
     return api_url
 
 
-def get_notifications_api_url() -> str | None:
-    listings_url = get_listings_api_url()
-    if not listings_url:
-        return None
-    return listings_url.replace("/api/listings", "/api/notifications")
+def get_agentverse_api_key() -> str | None:
+    key = os.environ.get("AGENTVERSE_API_KEY", "").strip()
+    return key or None
 
 
-def auth_headers() -> dict:
-    secret = os.environ.get("LISTINGS_API_SECRET")
-    headers = {"Content-Type": "application/json"}
-    if secret:
-        headers["Authorization"] = f"Bearer {secret}"
-    return headers
+def search_video_agents(api_key: str, topic: str, limit: int = 5) -> list[dict[str, Any]]:
+    queries = [
+        f"youtube video educational {topic}",
+        "video search youtube educational tutorial",
+        "online video recommendation learning",
+    ]
+
+    for query in queries:
+        payload = {
+            "search_text": query,
+            "semantic_search": True,
+            "limit": limit,
+            "offset": 0,
+            "sort": "relevancy",
+            "direction": "desc",
+            "cutoff": "balanced",
+            "exclude_geo_agents": True,
+            "source": "agentverse",
+            "filters": {"state": ["active"]},
+        }
+
+        try:
+            response = requests.post(
+                AGENTVERSE_SEARCH_URL,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=20,
+            )
+            response.raise_for_status()
+            agents = response.json().get("agents", [])
+            if agents:
+                return agents
+        except requests.RequestException:
+            continue
+
+    return []
 
 
-def terminal_card_message(narration: str, root: dict) -> ChatMessage:
+def rank_agents(agents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def score(agent: dict[str, Any]) -> float:
+        name = (agent.get("name") or "").lower()
+        description = (agent.get("short_description") or agent.get("readme") or "").lower()
+        text = f"{name} {description}"
+        video_hint = sum(
+            1 for keyword in ("video", "youtube", "watch", "tutorial", "media")
+            if keyword in text
+        )
+        interactions = float(agent.get("recent_interactions") or agent.get("total_interactions") or 0)
+        success = float(agent.get("recent_success_rate") or 0)
+        return video_hint * 10 + interactions * 0.01 + success
+
+    return sorted(agents, key=score, reverse=True)
+
+
+def agent_chat_message(text: str) -> ChatMessage:
     return ChatMessage(
         timestamp=datetime.now(timezone.utc),
         msg_id=uuid4(),
-        content=[
-            TextContent(type="text", text=narration),
-            MetadataContent(
-                type="metadata",
-                metadata={
-                    "card_protocol_version": "1",
-                    "requires_card_interaction": "false",
-                    "is_terminal": "true",
-                    "card_kind": "custom",
-                    "card_payload": json.dumps({"root": root}),
-                    "preferred_drawer_width_px": "420",
-                },
-            ),
-            EndSessionContent(type="end-session"),
-        ],
+        content=[TextContent(type="text", text=text)],
     )
+
+
+def extract_chat_text(message: ChatMessage) -> str:
+    parts: list[str] = []
+    for item in message.content:
+        if isinstance(item, TextContent):
+            parts.append(item.text)
+    return "\n".join(parts).strip()
+
+
+def parse_video_from_response(text: str) -> dict[str, str] | None:
+    text = text.strip()
+    if not text:
+        return None
+
+    pipe_match = TITLE_URL_PATTERN.search(text)
+    if pipe_match:
+        title, url, reason = pipe_match.groups()
+        return {
+            "title": title.strip(),
+            "url": url.strip().rstrip(".,)"),
+            "reason": reason.strip(),
+        }
+
+    urls = URL_PATTERN.findall(text)
+    if not urls:
+        return None
+
+    url = urls[0].rstrip(".,)")
+    title = "Recommended video"
+    for line in text.splitlines():
+        line = line.strip()
+        if url in line:
+            title = line.replace(url, "").strip(" -:|•") or title
+            break
+
+    return {"title": title, "url": url, "reason": "Suggested by an Agentverse video agent."}
+
+
+def validate_youtube_url(url: str) -> dict[str, str] | None:
+    """Confirm the video exists and is embeddable via YouTube oEmbed."""
+    try:
+        response = requests.get(
+            "https://www.youtube.com/oembed",
+            params={"url": url, "format": "json"},
+            timeout=8,
+        )
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        title = str(data.get("title", "")).strip()
+        return {"title": title or "YouTube video", "url": url}
+    except requests.RequestException:
+        return None
+
+
+async def discover_videos_from_agents(
+    ctx: Context,
+    topic: str,
+    timeout: float = 18.0,
+) -> list[dict[str, str]]:
+    api_key = get_agentverse_api_key()
+    if not api_key:
+        ctx.logger.warning("AGENTVERSE_API_KEY not set — skipping agent video discovery")
+        return []
+
+    agents = rank_agents(search_video_agents(api_key, topic))
+    if not agents:
+        ctx.logger.warning("No video agents found on Agentverse")
+        return []
+
+    prompt = (
+        f"Find the single best free online video (prefer YouTube) to learn: {topic}. "
+        "Reply in this exact format:\n"
+        "TITLE | URL | one sentence why it's good"
+    )
+
+    videos: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+
+    for candidate in agents[:3]:
+        address = candidate.get("address")
+        if not address:
+            continue
+
+        name = candidate.get("name") or "Agentverse agent"
+        ctx.logger.info(f"Querying video agent {name} ({address}) for topic: {topic}")
+
+        try:
+            response, status = await ctx.send_and_receive(
+                address,
+                agent_chat_message(prompt),
+                response_type=ChatMessage,
+                timeout=timeout,
+            )
+        except Exception as error:
+            ctx.logger.warning(f"Video agent {name} failed: {error}")
+            continue
+
+        if not isinstance(response, ChatMessage):
+            ctx.logger.warning(f"Video agent {name} returned unexpected type: {status}")
+            continue
+
+        parsed = parse_video_from_response(extract_chat_text(response))
+        if not parsed:
+            ctx.logger.warning(f"Video agent {name} returned no parseable URL")
+            continue
+
+        validated = validate_youtube_url(parsed["url"])
+        if not validated:
+            ctx.logger.warning(f"Video agent {name} returned invalid/unavailable URL")
+            continue
+
+        url = validated["url"]
+        if url in seen_urls:
+            continue
+
+        seen_urls.add(url)
+        videos.append(
+            {
+                "title": validated["title"],
+                "url": url,
+                "reason": parsed["reason"],
+                "source": name,
+            }
+        )
+
+        if len(videos) >= 2:
+            break
+
+    return videos
 
 
 def text_message(text: str) -> ChatMessage:
@@ -214,171 +314,67 @@ def text_message(text: str) -> ChatMessage:
     )
 
 
-def live_card_root(title: str, price: float, category: str, listing_url: str | None) -> dict:
-    children = [
-        {"type": "badge", "label": "LIVE", "variant": "success"},
-        {"type": "text", "value": f"${price:g} · {category}", "style": "body"},
-    ]
-    if listing_url:
-        children.append({"type": "text", "value": listing_url, "style": "muted"})
-    return {
-        "type": "section",
-        "title": title,
-        "subtitle": "Your listing is live",
-        "children": children,
-    }
-
-
-def sold_card_root(title: str, price: float) -> dict:
-    return {
-        "type": "section",
-        "title": title,
-        "subtitle": "Great news!",
-        "children": [
-            {"type": "badge", "label": "SOLD ✓", "variant": "success"},
-            {"type": "text", "value": f"Sold for ${price:g}", "style": "emphasis"},
-            {
-                "type": "text",
-                "value": "Payment received — your item found a buyer.",
-                "style": "muted",
-            },
-        ],
-    }
-
-
-def post_listing(ctx: Context, draft: dict, seller_id: str) -> dict:
-    api_url = get_listings_api_url()
-    secret = os.environ.get("LISTINGS_API_SECRET")
-
+def call_course_api(
+    ctx: Context,
+    sender: str,
+    message: str,
+    agent_videos: list[dict[str, str]] | None = None,
+    action: str | None = None,
+    user_notes: str | None = None,
+) -> str:
+    api_url = get_course_api_url()
     if not api_url:
-        return {"ok": False, "error": "MARKETPLACE_API_URL is not configured in Agent Secrets."}
+        return (
+            "Course API is not configured. Set MARKETPLACE_API_URL to your deployed "
+            "/api/course endpoint in Agent Secrets."
+        )
 
-    headers = {"Content-Type": "application/json"}
-    if secret:
-        headers["Authorization"] = f"Bearer {secret}"
-
-    payload = {
-        "title": draft["title"],
-        "description": draft["description"],
-        "price": draft["price"],
-        "category": draft["category"],
-        "sellerId": seller_id,
-    }
+    payload: dict = {"message": message, "sessionId": sender}
+    if agent_videos:
+        payload["agentVideos"] = agent_videos
+    if action:
+        payload["action"] = action
+    if user_notes:
+        payload["userNotes"] = user_notes
 
     try:
-        response = requests.post(api_url, json=payload, headers=headers, timeout=20)
+        response = requests.post(
+            api_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=90,
+        )
         response.raise_for_status()
         data = response.json()
-        listing_url = data.get("shopifyUrl") or data.get("url")
-        admin_url = data.get("shopifyAdminUrl")
-        return {
-            "ok": True,
-            "title": draft["title"],
-            "price": draft["price"],
-            "category": draft["category"],
-            "listing_url": listing_url,
-            "admin_url": admin_url,
-            "product_id": data.get("listing", {}).get("shopifyProductId"),
-        }
+        return str(data.get("reply", "Course agent returned an empty reply."))
     except requests.RequestException as error:
-        ctx.logger.exception("Failed to post listing")
-        response_text = ""
+        ctx.logger.exception("Failed to call course API")
+        detail = str(error)
         if hasattr(error, "response") and error.response is not None:
             try:
-                err_json = error.response.json()
-                response_text = err_json.get("error", "") or str(err_json)
+                detail = error.response.json().get("error", detail)
             except Exception:
-                response_text = error.response.text[:200]
-        detail = response_text or str(error)
-        return {"ok": False, "error": detail}
+                detail = error.response.text[:200]
+        return f"Could not reach the course service: {detail}"
 
 
-def process_message(ctx: Context, sender: str, text: str) -> str:
-    message = normalize_message(text)
-    session = get_session(ctx, sender)
-    step = session.get("step", "idle")
-    draft = session.get("draft", {})
-
-    if step == "confirm":
-        return 'Please reply "yes" to post or "no" to cancel.'
-
-    if step == "idle":
-        if not wants_to_list(message):
-            return (
-                "What would you like me to sell? "
-                'Describe the item and price — e.g. "my desk for $80".'
-            )
-
-        extracted = extract_listing_from_message(message)
-        if extracted:
-            filled = {k: v for k, v in extracted.items() if v not in (None, "")}
-            draft.update(filled)
-
-        price = parse_price(message)
-        if price is not None and not draft.get("price"):
-            draft["price"] = price
-
-        if draft.get("title") and draft.get("price") and not draft.get("description"):
-            session["draft"] = draft
-            session["step"] = "description"
-            save_session(ctx, sender, session)
-            return "Got the title and price. What description should buyers see?"
-
-        missing = [field for field in ("title", "description", "price", "category") if not draft.get(field)]
-        if not missing:
-            session["draft"] = draft
-            session["step"] = "confirm"
-            save_session(ctx, sender, session)
-            return build_summary(draft)
-
-        session["draft"] = draft
-        session["step"] = missing[0]
-        save_session(ctx, sender, session)
-
-        prompts = {
-            "title": "What would you like me to sell?",
-            "description": "Great. Now give me a short description for buyers.",
-            "price": "What price should I list it for? (e.g. 120 or $120)",
-            "category": "What category fits best? (e.g. Electronics, Furniture, Clothing)",
-        }
-        return prompts[missing[0]]
-
-    field_prompts = {
-        "title": ("title", "description", "Great. Now give me a short description for buyers."),
-        "description": ("description", "price", "What price should I list it for? (e.g. 120 or $120)"),
-        "price": ("price", "category", "What category fits best? (e.g. Electronics, Furniture, Clothing)"),
-        "category": ("category", "confirm", None),
-    }
-
-    if step in field_prompts:
-        field, next_step, next_prompt = field_prompts[step]
-
-        if field == "price":
-            price = parse_price(message)
-            if price is None:
-                return "I couldn't read that price. Please send a number like 75 or $75."
-            draft["price"] = price
-        else:
-            draft[field] = message
-
-        if next_step == "confirm":
-            session["draft"] = draft
-            session["step"] = "confirm"
-            save_session(ctx, sender, session)
-            return build_summary(draft)
-
-        session["draft"] = draft
-        session["step"] = next_step
-        save_session(ctx, sender, session)
-        return next_prompt or build_summary(draft)
-
-    session["step"] = "idle"
-    save_session(ctx, sender, session)
-    return "Tell me what you'd like to sell to start a new listing."
+def format_video_note(videos: list[dict[str, str]]) -> str:
+    if not videos:
+        return ""
+    lines = ["", "**Recommended videos** (via Agentverse agents):"]
+    for video in videos[:2]:
+        title = video.get("title", "Video")
+        url = video.get("url", "")
+        source = video.get("source", "Agentverse")
+        lines.append(f"• [{title}]({url}) — _from {source}_")
+    return "\n".join(lines)
 
 
 @protocol.on_message(ChatMessage)
 async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
+    if AGENT_ADDRESS_PATTERN.match(sender):
+        return
+
     await ctx.send(
         sender,
         ChatAcknowledgement(
@@ -393,109 +389,39 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
             text += item.text
 
     message = normalize_message(text)
-    session = get_session(ctx, sender)
+    if not message:
+        reply = (
+            "What would you like to learn? I'll build a course, find the best videos "
+            "via other Agentverse agents, and teach you using the Feynman Technique."
+        )
+    elif is_likely_topic_request(message):
+        topic, notes = split_topic_and_notes(message)
+        ctx.logger.info(f"Topic request — querying Agentverse video agents for: {topic}")
 
-    if session.get("step") == "confirm" and is_affirmative(message):
-        draft = session.get("draft", {})
-        required = ("title", "description", "price", "category")
-        if not all(draft.get(field) for field in required):
-            clear_session(ctx, sender)
-            await ctx.send(
+        videos, reply = await asyncio.gather(
+            discover_videos_from_agents(ctx, topic),
+            asyncio.to_thread(call_course_api, ctx, sender, topic, None, None, notes),
+        )
+
+        if videos:
+            await asyncio.to_thread(
+                call_course_api,
+                ctx,
                 sender,
-                text_message(
-                    "Something was missing from the draft. Tell me what you'd like to sell to start over."
-                ),
+                "",
+                videos,
+                "attachVideos",
             )
-            return
+            reply = f"{reply}{format_video_note(videos)}"
+    else:
+        reply = await asyncio.to_thread(call_course_api, ctx, sender, message, None)
 
-        await ctx.send(sender, text_message("Publishing your listing..."))
-        result = post_listing(ctx, draft, seller_id=sender)
-        clear_session(ctx, sender)
-
-        if result.get("ok"):
-            add_seller_watch(ctx, sender)
-            card = live_card_root(
-                title=str(result["title"]),
-                price=float(result["price"]),
-                category=str(result["category"]),
-                listing_url=result.get("listing_url"),
-            )
-            narration = f"Done! {result['title']} is live."
-            await ctx.send(sender, terminal_card_message(narration, card))
-            return
-
-        await ctx.send(
-            sender,
-            text_message(f"Could not publish your listing: {result.get('error', 'Unknown error')}"),
-        )
-        return
-
-    if session.get("step") == "confirm" and is_negative(message):
-        clear_session(ctx, sender)
-        await ctx.send(
-            sender,
-            text_message("Listing cancelled. Tell me what you'd like to sell whenever you're ready."),
-        )
-        return
-
-    reply = process_message(ctx, sender, text)
     await ctx.send(sender, text_message(reply))
 
 
 @protocol.on_message(ChatAcknowledgement)
 async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
     pass
-
-
-@agent.on_interval(period=15.0)
-async def poll_sold_notifications(ctx: Context):
-    watchlist = ctx.storage.get("watchlist") or []
-    if not watchlist:
-        return
-
-    api_url = get_notifications_api_url()
-    if not api_url:
-        return
-
-    headers = auth_headers()
-
-    for seller in watchlist:
-        try:
-            response = requests.get(
-                f"{api_url}?sellerId={quote(seller, safe='')}",
-                headers=headers,
-                timeout=10,
-            )
-            response.raise_for_status()
-            notifications = response.json().get("notifications", [])
-        except Exception:
-            ctx.logger.exception("Failed to poll sold notifications")
-            continue
-
-        delivered_ids = []
-        for note in notifications:
-            title = str(note.get("title", "Your item"))
-            price = float(note.get("price", 0))
-            card = sold_card_root(title, price)
-            await ctx.send(
-                seller,
-                terminal_card_message(f"✓ Sold! {title} just found a buyer.", card),
-            )
-            if note.get("id"):
-                delivered_ids.append(note["id"])
-
-        if not delivered_ids:
-            continue
-
-        try:
-            requests.post(
-                api_url,
-                headers=headers,
-                json={"action": "ack", "ids": delivered_ids},
-                timeout=10,
-            )
-        except Exception:
-            ctx.logger.exception("Failed to ack sold notifications")
 
 
 agent.include(protocol, publish_manifest=True)

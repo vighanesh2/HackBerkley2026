@@ -1,26 +1,312 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --notion-canvas: #f7f7f5;
+  --notion-page: #ffffff;
+  --notion-text: #37352f;
+  --notion-muted: #787774;
+  --notion-border: #e9e9e7;
+  --notion-callout-blue: #eef3fb;
+  --notion-callout-blue-border: #2eaadc;
+  --notion-callout-yellow: #fbf3db;
+  --notion-callout-yellow-border: #dfab01;
+  --notion-callout-green: #edf3ec;
+  --notion-callout-green-border: #448361;
+  --notion-callout-purple: #f3eef8;
+  --notion-callout-purple-border: #9065b0;
+  --notion-hover: rgba(55, 53, 47, 0.06);
+
+  --gemini-bg: #ffffff;
+  --gemini-surface: #f0f4f9;
+  --gemini-input-bg: #f0f4f9;
+  --gemini-user-bubble: #e3e8ef;
+  --gemini-text: #1f1f1f;
+  --gemini-muted: #5f6368;
+  --gemini-border: #e0e3e7;
+  --gemini-accent: #1a73e8;
+  --gemini-accent-soft: #d3e3fd;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-notion-canvas: var(--notion-canvas);
+  --color-notion-page: var(--notion-page);
+  --color-notion-text: var(--notion-text);
+  --color-notion-muted: var(--notion-muted);
+  --color-notion-border: var(--notion-border);
+  --color-gemini-bg: var(--gemini-bg);
+  --color-gemini-surface: var(--gemini-surface);
+  --color-gemini-input-bg: var(--gemini-input-bg);
+  --color-gemini-user-bubble: var(--gemini-user-bubble);
+  --color-gemini-text: var(--gemini-text);
+  --color-gemini-muted: var(--gemini-muted);
+  --color-gemini-border: var(--gemini-border);
+  --color-gemini-accent: var(--gemini-accent);
+  --color-gemini-accent-soft: var(--gemini-accent-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --notion-canvas: #191919;
+    --notion-page: #202020;
+    --notion-text: #e6e6e5;
+    --notion-muted: #9b9a97;
+    --notion-border: #2f2f2f;
+    --notion-callout-blue: #1f2a36;
+    --notion-callout-blue-border: #2eaadc;
+    --notion-callout-yellow: #3a3522;
+    --notion-callout-yellow-border: #dfab01;
+    --notion-callout-green: #1f2e24;
+    --notion-callout-green-border: #448361;
+    --notion-callout-purple: #2a2433;
+    --notion-callout-purple-border: #9065b0;
+    --notion-hover: rgba(255, 255, 255, 0.06);
+
+    --gemini-bg: #131314;
+    --gemini-surface: #1e1f20;
+    --gemini-input-bg: #282a2c;
+    --gemini-user-bubble: #394457;
+    --gemini-text: #e3e3e3;
+    --gemini-muted: #9aa0a6;
+    --gemini-border: #3c4043;
+    --gemini-accent: #8ab4f8;
+    --gemini-accent-soft: #394457;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--notion-canvas);
+  color: var(--notion-text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.notion-callout-blue {
+  background: var(--notion-callout-blue);
+  border-left: 3px solid var(--notion-callout-blue-border);
+}
+
+.notion-callout-yellow {
+  background: var(--notion-callout-yellow);
+  border-left: 3px solid var(--notion-callout-yellow-border);
+}
+
+.notion-callout-green {
+  background: var(--notion-callout-green);
+  border-left: 3px solid var(--notion-callout-green-border);
+}
+
+.notion-callout-purple {
+  background: var(--notion-callout-purple);
+  border-left: 3px solid var(--notion-callout-purple-border);
+}
+
+.lesson-prose {
+  max-width: 65ch;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.doc-save-btn {
+  background: #1a73e8;
+}
+
+.doc-save-btn:hover {
+  background: #1765cc;
+}
+
+@media (prefers-color-scheme: dark) {
+  .doc-save-btn {
+    background: #8ab4f8;
+    color: #131314;
+  }
+
+  .doc-save-btn:hover {
+    background: #aecbfa;
+  }
+}
+
+@keyframes gemini-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.gemini-dot {
+  animation: gemini-pulse 1.4s ease-in-out infinite;
+}
+
+.gemini-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.gemini-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes slide-up-panel {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-panel-enter {
+  animation: slide-up-panel 0.2s ease-out;
+}
+
+/* Auth loading */
+.auth-spinner {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  border: 3px solid var(--notion-border);
+  border-top-color: #1a73e8;
+  animation: auth-spin 0.85s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Auth success */
+.auth-success-overlay-visible {
+  animation: auth-success-fade-in 0.25s ease-out forwards;
+}
+
+.auth-success-overlay-out {
+  animation: auth-success-fade-out 0.35s ease-in forwards;
+}
+
+.auth-success-card {
+  animation: auth-success-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.auth-success-icon {
+  animation: auth-success-pop 0.5s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.auth-success-ring {
+  border: 2px solid #448361;
+  animation: auth-success-ring 1s 0.3s ease-out forwards;
+}
+
+@keyframes auth-success-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes auth-success-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes auth-success-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-success-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Floating icon */
+.auth-float {
+  animation: auth-float 2.4s ease-in-out infinite;
+}
+
+@keyframes auth-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Course generation loader */
+.course-gen-ring {
+  animation: course-gen-spin 1.4s linear infinite;
+}
+
+.course-gen-ring-delay {
+  animation-direction: reverse;
+  animation-duration: 1.8s;
+}
+
+@keyframes course-gen-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Login sent success */
+.login-sent-icon {
+  animation: auth-success-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Skeleton loading */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--notion-hover) 0%,
+    color-mix(in srgb, var(--notion-border) 60%, var(--notion-hover)) 50%,
+    var(--notion-hover) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }

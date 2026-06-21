@@ -1,94 +1,73 @@
-# Shopify Listing Agent
+# Feynman Course Agent
 
-AI agent (ASI:One + Agentverse) that **auto-posts real products to Shopify** via the Admin GraphQL API.
+AI agent (ASI:One + Agentverse + **LangGraph**) that **generates personalized courses** and teaches using the **Feynman Learning Technique**.
 
-## Is Shopify free?
+## Why LangGraph (not plain LangChain)?
 
-| Use case | Cost |
-|----------|------|
-| **Hackathon / dev testing** | **Free** — create unlimited [Partner dev stores](https://shopify.dev/docs/api/development-stores) |
-| **Live store for real sales** | **Paid** — from ~$29–39/mo (Basic plan). No permanent free plan. |
-| **Listing products** | **Unlimited products** on all paid plans — no per-listing fee |
-| **Transaction fees** | ~2.9% + $0.30 per online sale (lower on higher plans) |
+| Tool | Best for |
+|------|----------|
+| **LangChain** | Single-shot chains — one prompt in, one answer out |
+| **LangGraph** | Multi-step workflows with **loops and state** |
 
-**For your demo:** use a free Shopify Partners dev store. Products you create via the API are real and visible in Shopify Admin + your storefront.
+The Feynman Technique is inherently cyclic: **teach → explain back → find gaps → re-teach → repeat**. LangGraph models that as an explicit state graph (`outline → teach → challenge → evaluate → remediate`). LangChain alone would fight you on the loop.
 
 ## Architecture
 
 ```
 User → ASI:One Chat → Agentverse Agent (agent/agent.py)
                               ↓
-                    Next.js API (/api/listings)
+                    Next.js /api/course (LangGraph + ASI-1)
                               ↓
-                    Shopify Admin GraphQL API (productCreate)
-                              ↓
-                    Live product on your Shopify store
+              Feynman loop per module until mastery
 ```
+
+## Feynman loop
+
+1. **Outline** — LLM generates 4–6 modules from your topic
+2. **Teach** — simple explanation + analogy + example
+3. **Challenge** — you explain it back in your own words
+4. **Evaluate** — structured pass/fail + gap list
+5. **Remediate** — re-teach gaps, challenge again
+6. **Advance** — next module or course complete
 
 ## Quick start
 
-### 1. Create a free Shopify dev store
-
-1. Sign up at [partners.shopify.com](https://partners.shopify.com)
-2. **Dev stores** → **Add dev store** → create store (free, unlimited)
-3. Note your store URL: `your-store.myshopify.com`
-
-### 2. Create a custom app & get API token
-
-1. In Shopify Admin → **Settings** → **Apps and sales channels** → **Develop apps**
-2. **Create an app** → configure **Admin API scopes**:
-   - `write_products`
-   - `read_products`
-3. **Install app** → copy the **Admin API access token** (`shpat_...`)
-
-### 3. Configure `.env.local`
+### 1. Configure environment
 
 ```bash
 cp .env.example .env.local
 ```
 
 ```env
+ASI_API_KEY=your-key-from-asi1.ai-dashboard
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-LISTINGS_API_SECRET=your-secret-here
-SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
-SHOPIFY_ADMIN_ACCESS_TOKEN=shpat_xxxxxxxx
-SHOPIFY_API_VERSION=2025-01
 ```
 
-### 4. Run locally
+### 2. Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and try: *"Sell my desk for $80"* → confirm with *"yes"*.
+Open [http://localhost:3000](http://localhost:3000) and try: *"I want to learn Python data structures"*.
 
-The product will appear in **Shopify Admin → Products** and on your storefront.
+### 3. Deploy Agentverse agent
 
-## Deploy Agentverse agent
-
-1. Paste `agent/agent.py` into Agentverse **Build** tab
-2. Paste `agent/AGENTVERSE_README.md` into **README** tab
-3. Add secrets: `ASI_API_KEY`, `MARKETPLACE_API_URL`, `LISTINGS_API_SECRET`
-4. Deploy Next.js (Vercel) with the same Shopify env vars on the server
+1. Deploy this app to Vercel with `ASI_API_KEY` set
+2. Paste `agent/agent.py` into Agentverse **Build** tab
+3. Paste `agent/AGENTVERSE_README.md` into **README** tab
+4. Set secret: `MARKETPLACE_API_URL` = `https://your-app.vercel.app/api/course`
+5. Test on ASI:One with Agents toggle on
 
 ## API
 
-### `POST /api/listings`
-
-Creates a product on Shopify. Requires:
-
-```
-Authorization: Bearer <LISTINGS_API_SECRET>
-```
+### `POST /api/course`
 
 ```json
 {
-  "title": "Road Bike",
-  "description": "Lightweight frame, great condition",
-  "price": 450,
-  "category": "Sports"
+  "message": "I want to learn quantum computing basics",
+  "sessionId": "optional-session-key"
 }
 ```
 
@@ -96,14 +75,19 @@ Response:
 
 ```json
 {
-  "shopifyUrl": "https://your-store.myshopify.com/products/road-bike",
-  "shopifyAdminUrl": "https://your-store.myshopify.com/admin/products/123",
-  "publishedToShopify": true
+  "reply": "...",
+  "phase": "outline_ready",
+  "topic": "quantum computing basics",
+  "moduleIndex": 0,
+  "moduleCount": 5
 }
 ```
 
-## Docs
+## Project structure
 
-- [Shopify dev stores (free)](https://shopify.dev/docs/api/development-stores)
-- [productCreate mutation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate)
-- [ASI:One compatible agent](https://agentverse.ai/docs/uAgents/asimini-agent)
+```
+src/lib/course/feynman-graph.ts   ← LangGraph state machine
+src/lib/course/llm.ts             ← ASI-1 client
+src/app/api/course/route.ts       ← HTTP API
+agent/agent.py                    ← Agentverse chat bridge
+```
