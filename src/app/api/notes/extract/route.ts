@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       text = (await file.text()).trim();
     } else if (isDocumentFileName(name)) {
       const buffer = Buffer.from(await file.arrayBuffer());
-      text = await extractTextFromDocument(buffer);
+      text = await extractTextFromDocument(buffer, name);
     } else {
       return NextResponse.json(
         {

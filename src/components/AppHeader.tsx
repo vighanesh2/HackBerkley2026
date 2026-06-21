@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function AppHeader() {
+  const pathname = usePathname();
   const { user, loading, signOut, configured } = useAuth();
   const router = useRouter();
+
+  if (pathname.startsWith("/draw")) {
+    return null;
+  }
 
   async function handleSignOut() {
     await signOut();

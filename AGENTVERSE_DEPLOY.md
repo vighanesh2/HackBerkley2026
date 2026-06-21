@@ -3,9 +3,13 @@
 ## Architecture
 
 ```
-ASI:One Chat  →  Agentverse (agent/agent.py)  →  Vercel /api/course  →  LangGraph + RAG + ASI-1
-Web browser   →  Next.js (Supabase auth)       →  same /api/course   →  + cloud library saves
+ASI:One Chat  →  Agentverse (agent/agent.py)
+                      ├─ Agentverse Search → video specialist agents (agent-to-agent)
+                      └─ Vercel /api/course  →  LangGraph + RAG + ASI-1
+Web browser   →  Next.js (Supabase auth)  →  same /api/course  →  YouTube search fallback + library saves
 ```
+
+**Videos:** On ASI:One, your hosted agent searches Agentverse for video agents and messages them directly. The web app uses server-side YouTube search as a fallback when users are logged in on the site.
 
 Agentverse uses a **shared API secret** (not Supabase login). The web app uses **email/password + Supabase**.
 
@@ -22,6 +26,8 @@ Agentverse uses a **shared API secret** (not Supabase login). The web app uses *
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (instant sign-up, optional) |
 | `AGENT_COURSE_API_SECRET` | random secret string — **same value** as Agentverse secret |
 | `NEXT_PUBLIC_APP_URL` | `https://your-app.vercel.app` |
+| `VISION_API_KEY` | OpenAI (or compatible) key for **Drawing Coach** vision (`gpt-4o-mini`) |
+| `VISION_MODEL` | optional — defaults to `gpt-4o-mini` |
 
 3. Run `supabase/schema.sql` in Supabase SQL Editor
 4. Redeploy
@@ -39,7 +45,7 @@ Your course API: **`https://your-app.vercel.app/api/course`**
 |--------|--------|
 | `COURSE_API_URL` | `https://your-app.vercel.app/api/course` |
 | `AGENT_COURSE_API_SECRET` | same random string as Vercel |
-| `AGENTVERSE_API_KEY` | from [agentverse.ai/profile/api-keys](https://agentverse.ai/profile/api-keys) |
+| `AGENTVERSE_API_KEY` | from [agentverse.ai/profile/api-keys](https://agentverse.ai/profile/api-keys) — **required for agent-to-agent video discovery** |
 
 Legacy names `MARKETPLACE_API_URL` and `LISTINGS_API_SECRET` still work.
 
@@ -47,10 +53,21 @@ Legacy names `MARKETPLACE_API_URL` and `LISTINGS_API_SECRET` still work.
 
 ## Step 3 — Test on ASI:One
 
+### Course mode
+
 1. Open [asi1.ai](https://asi1.ai) → **Agents** toggle on
 2. Chat with your agent or search for Feynman / course learning
 3. Say: *"I want to learn basic cryptography"*
 4. Confirm outline → read lesson → explain back → watch gap remediation
+
+### Drawing Coach mode
+
+1. Say: *"Teach me to draw a neural network diagram"*
+2. Agent replies with a link: `https://your-app.vercel.app/draw/{sessionId}`
+3. Open the link → upload reference diagram → draw on canvas
+4. Allow microphone — the AI coach compares your canvas to the reference and speaks tips
+
+Requires `VISION_API_KEY` on Vercel. Works best in **Chrome** (continuous speech recognition).
 
 ### Optional: RAG notes via agent chat
 
@@ -73,3 +90,6 @@ Your pasted textbook excerpt or study notes here...
 | `Course API is not configured` | Set `COURSE_API_URL` in Agentverse secrets (full `https://…/api/course` URL) |
 | Agent timeout / keeps loading / "Could not reach the agent" | **Most common:** old `agent.py` ignored all ASI:One senders (they use `agent1…` addresses). Re-paste latest `agent/agent.py` and click **Run**. Also confirm agent status is **Active**. |
 | Agent status not **Active** | Agentverse dashboard → click **Run** |
+| No videos in ASI:One course | Confirm `AGENTVERSE_API_KEY` in Agentverse secrets. Send `ping` — should say `Video agents: enabled`. Check Agentverse logs for video agent queries. |
+| Drawing coach says vision not configured | Add `VISION_API_KEY` on Vercel and redeploy |
+| Mic / voice not working | Use Chrome; click **Mic on** after uploading reference |

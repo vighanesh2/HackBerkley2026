@@ -14,6 +14,40 @@ import type { CoursePhase } from "@/types/course";
 import type { ChatMessage } from "@/types/chat";
 import type { SavedCourseRow } from "@/types/saved-course";
 
+type CompressionStats = {
+  original_tokens: number;
+  compressed_tokens: number;
+  tokens_saved: number;
+  pct_saved: number;
+  latency_ms: number;
+  fallback: boolean;
+  cache_hit: boolean;
+  empty_input: boolean;
+  error?: string;
+};
+
+function CompressionBadge({ stats }: { stats: CompressionStats }) {
+  if (stats.empty_input || stats.tokens_saved === 0) return null;
+
+  const label = stats.fallback
+    ? "RAG (no compression)"
+    : `${stats.pct_saved.toFixed(1)}% compressed · ${stats.tokens_saved} tokens saved`;
+
+  const color = stats.fallback
+    ? "bg-yellow-50 border-yellow-200 text-yellow-700"
+    : "bg-emerald-50 border-emerald-200 text-emerald-700";
+
+  return (
+    <div
+      className={`fixed bottom-6 left-4 z-50 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm ${color}`}
+      title={`Token Company compression · ${stats.latency_ms}ms · original: ${stats.original_tokens} → ${stats.compressed_tokens} tokens`}
+    >
+      <span aria-hidden className="text-sm">&#x2728;</span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function ChatIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -188,6 +222,7 @@ export default function CourseWorkspace({ initialCourseId }: CourseWorkspaceProp
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
   const [phase, setPhase] = useState<CoursePhase>("idle");
   const [userNotes, setUserNotes] = useState("");
+  const [compressionStats, setCompressionStats] = useState<CompressionStats | null>(null);
   const [savedCourseId, setSavedCourseId] = useState<string | null>(initialCourseId ?? null);
   const messagesRef = useRef<ChatMessage[]>([]);
   const signInHandled = useRef(false);
@@ -277,6 +312,7 @@ export default function CourseWorkspace({ initialCourseId }: CourseWorkspaceProp
         moduleIndex?: number;
         phase?: CoursePhase;
         savedCourseId?: string;
+        compressionStats?: CompressionStats;
       };
 
       if (!response.ok) {
@@ -294,6 +330,9 @@ export default function CourseWorkspace({ initialCourseId }: CourseWorkspaceProp
       }
       if (data.savedCourseId) {
         setSavedCourseId(data.savedCourseId);
+      }
+      if (data.compressionStats) {
+        setCompressionStats(data.compressionStats);
       }
 
       const nextMessages = [...pending, { role: "assistant" as const, text: data.reply ?? "" }];
@@ -343,6 +382,8 @@ export default function CourseWorkspace({ initialCourseId }: CourseWorkspaceProp
 
   return (
     <>
+      {compressionStats && <CompressionBadge stats={compressionStats} />}
+
       {showLoginSuccess && (
         <AuthSuccessOverlay message="Welcome back!" onDone={dismissLoginSuccess} />
       )}

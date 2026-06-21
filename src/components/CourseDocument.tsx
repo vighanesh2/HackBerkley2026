@@ -424,11 +424,15 @@ export default function CourseDocumentView({
     }
   }
 
+  const hasNotes = notesInput.trim().length > 0;
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const text = topicInput.trim();
-    if (!text || loading) return;
-    onStartTopic(text, notesInput.trim() || undefined);
+    // Topic is required only when no notes are uploaded.
+    // If notes are uploaded, the system can auto-detect the subject.
+    if ((!text && !hasNotes) || loading) return;
+    onStartTopic(text || "teach me from my notes", notesInput.trim() || undefined);
     setTopicInput("");
     setNotesInput("");
     setUploadLabel(null);
@@ -456,13 +460,14 @@ export default function CourseDocumentView({
 
           <form onSubmit={handleSubmit} className="mt-8 text-left">
             <label htmlFor="topic-input" className="mb-1.5 block text-sm font-medium text-notion-text">
-              What do you want to learn?
+              What do you want to learn?{" "}
+              {hasNotes && <span className="font-normal text-notion-muted">(optional — auto-detected from your notes)</span>}
             </label>
             <input
               id="topic-input"
               value={topicInput}
               onChange={(e) => setTopicInput(e.target.value)}
-              placeholder="e.g. linear algebra for beginners"
+              placeholder={hasNotes ? "Leave blank to auto-detect topic from your notes…" : "e.g. linear algebra for beginners"}
               disabled={loading}
               className="w-full rounded-lg border border-notion-border bg-notion-page px-4 py-3 text-base text-notion-text outline-none focus:border-[var(--notion-callout-blue-border)] disabled:opacity-60"
             />
@@ -509,7 +514,7 @@ export default function CourseDocumentView({
 
             <button
               type="submit"
-              disabled={loading || extractingNotes || !topicInput.trim()}
+              disabled={loading || extractingNotes || (!topicInput.trim() && !hasNotes)}
               className="mt-4 w-full rounded-lg bg-notion-text px-4 py-3 text-sm font-medium text-notion-page transition hover:opacity-90 disabled:opacity-40"
             >
               {loading ? "Generating course…" : "Generate course"}

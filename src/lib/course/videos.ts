@@ -63,21 +63,30 @@ export function mergeDiscoveredVideos(
 
   if (allVideos.length === 0) return document;
 
-  const next = mergeAgentVideos(document, allVideos);
+  // Add all unique videos to the resources section.
+  const next: CourseDocument = {
+    ...document,
+    featuredVideo: discovered.featured ?? document.featuredVideo,
+    resources: [...document.resources],
+    modules: document.modules.map((m) => ({ ...m })),
+  };
 
-  if (discovered.featured) {
-    next.featuredVideo = discovered.featured;
+  for (const video of allVideos) {
+    upsertVideoResource(next, video);
   }
 
-  discovered.moduleVideos.forEach((video, index) => {
-    if (next.modules[index]) {
-      next.modules[index].recommendedVideo = video;
+  // Assign a unique video to EVERY module.
+  // Priority: module-specific video → featured (only for module 0 if no other option).
+  next.modules.forEach((module, index) => {
+    const moduleVideo = discovered.moduleVideos[index];
+    if (moduleVideo) {
+      module.recommendedVideo = moduleVideo;
+    } else if (index === 0 && discovered.featured) {
+      // Only fall back to featured for the first module; leave others without a video
+      // rather than repeating the same one across all modules.
+      module.recommendedVideo = discovered.featured;
     }
   });
-
-  if (next.modules[0] && !next.modules[0].recommendedVideo && discovered.featured) {
-    next.modules[0].recommendedVideo = discovered.featured;
-  }
 
   return next;
 }

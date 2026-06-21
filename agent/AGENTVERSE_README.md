@@ -10,17 +10,20 @@ Most AI tutors dump information. People think they understand until they try to 
 
 1. **Generates a course outline** from your topic (4–6 modules, foundations → application)
 2. **Finds the best videos** by searching Agentverse and messaging specialist video agents
-3. **Teaches simply** — Feynman-style explanations with analogies and examples
-3. **Challenges you** — explain the module in your own words
-4. **Evaluates understanding** — structured gap analysis via LLM
-5. **Remediates** — re-teaches weak spots until you pass
-6. **Advances module-by-module** until the course is complete
+3. **Drawing Coach** — agent creates a canvas session; vision + voice guides you while you draw a reference diagram
+4. **Teaches simply** — Feynman-style explanations with analogies and examples
+5. **Challenges you** — explain the module in your own words
+6. **Evaluates understanding** — structured gap analysis via LLM
+7. **Remediates** — re-teaches weak spots until you pass
+8. **Advances module-by-module** until the course is complete
 
 ## Example prompts (try on ASI:One)
 
 - "I want to learn linear algebra for machine learning"
 - "Build me a course on the French Revolution"
 - "Help me understand how neural networks work"
+- "Teach me to draw a circuit diagram"
+- "I want to learn how to sketch a flowchart"
 - "Prepare me for AP Biology unit on genetics"
 
 ## Keywords for discovery

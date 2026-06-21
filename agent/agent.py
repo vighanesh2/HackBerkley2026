@@ -4,7 +4,10 @@ Feynman Course Agent — deploy on Agentverse as a Hosted Agent.
 Required Agent Secrets:
   COURSE_API_URL           — e.g. https://your-app.vercel.app/api/course
   AGENT_COURSE_API_SECRET  — must match AGENT_COURSE_API_SECRET on Vercel (server auth)
-  AGENTVERSE_API_KEY       — for searching & messaging video specialist agents
+  AGENTVERSE_API_KEY       — searches Agentverse + messages video specialist agents (agent-to-agent)
+
+Optional:
+  ENABLE_AGENT_VIDEO_DISCOVERY=false  — disable agent-to-agent video lookup (default: on when AGENTVERSE_API_KEY is set)
 
 Legacy secret name MARKETPLACE_API_URL still works for COURSE_API_URL.
 
@@ -65,6 +68,83 @@ SHORT_REPLIES = {
 
 
 NOTES_MARKER = re.compile(r"(?:^|\n)---\s*notes\s*---\s*\n", re.IGNORECASE)
+
+DRAWING_REQUEST_PATTERN = re.compile(
+    r"\b("
+    r"draw|sketch|diagram|canvas|learn to draw|help me draw|"
+    r"teach me to draw|how to draw|trace this|copy this diagram"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def get_drawing_session_api_url() -> str | None:
+    course_url = get_course_api_url()
+    if not course_url:
+        return None
+    base = course_url.rsplit("/api/course", 1)[0]
+    return f"{base}/api/drawing/session"
+
+
+def is_likely_drawing_request(message: str) -> bool:
+    return bool(DRAWING_REQUEST_PATTERN.search(message))
+
+
+def drawing_topic_from_message(message: str) -> str:
+    cleaned = normalize_message(message)
+    cleaned = DRAWING_REQUEST_PATTERN.sub("", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,-")
+    return cleaned or "diagram drawing practice"
+
+
+def call_create_drawing_session(ctx: Context, sender: str, topic: str) -> str | None:
+    api_url = get_drawing_session_api_url()
+    if not api_url:
+        ctx.logger.error("Drawing session API URL is not configured")
+        return None
+
+    secret = get_agent_api_secret()
+    if not secret:
+        ctx.logger.error("AGENT_COURSE_API_SECRET is not set")
+        return None
+
+    try:
+        response = requests.post(
+            api_url,
+            json={"sessionId": sender, "topic": topic},
+            headers=course_api_headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return str(data.get("url") or "")
+    except requests.RequestException as error:
+        ctx.logger.exception("Failed to create drawing session")
+        detail = str(error)
+        if hasattr(error, "response") and error.response is not None:
+            try:
+                detail = error.response.json().get("error", detail)
+            except Exception:
+                detail = error.response.text[:200]
+        ctx.logger.error(f"Drawing session error: {detail}")
+        return None
+
+
+async def process_drawing_session(ctx: Context, sender: str, topic: str) -> None:
+    url = await asyncio.to_thread(call_create_drawing_session, ctx, sender, topic)
+    if url:
+        reply = (
+            f"Your drawing coach is ready.\n\n"
+            f"**Open this link:** {url}\n\n"
+            "Upload the reference diagram you want to learn, then draw on the canvas. "
+            "The AI will watch your progress and guide you by voice."
+        )
+    else:
+        reply = (
+            "I couldn't start a drawing session. Confirm COURSE_API_URL and "
+            "AGENT_COURSE_API_SECRET on Vercel and Agentverse."
+        )
+    await ctx.send(sender, text_message(reply))
 
 
 def split_topic_and_notes(message: str) -> tuple[str, str | None]:
@@ -369,6 +449,13 @@ async def process_course_request(
     topic: str | None = None,
 ) -> None:
     try:
+        video_task: asyncio.Task[list[dict[str, str]]] | None = None
+        if topic and should_use_agent_video_discovery():
+            ctx.logger.info(f"Querying Agentverse video specialist agents for: {topic}")
+            video_task = asyncio.create_task(
+                discover_videos_from_agents(ctx, topic, timeout=15.0)
+            )
+
         reply = await asyncio.to_thread(
             call_course_api,
             ctx,
@@ -379,19 +466,20 @@ async def process_course_request(
             notes,
         )
 
-        if topic and video_discovery_enabled():
-            ctx.logger.info(f"Optional video discovery for: {topic}")
-            videos = await discover_videos_from_agents(ctx, topic, timeout=12.0)
-            if videos:
-                await asyncio.to_thread(
-                    call_course_api,
-                    ctx,
-                    sender,
-                    "",
-                    videos,
-                    "attachVideos",
-                )
-                reply = f"{reply}{format_video_note(videos)}"
+        videos: list[dict[str, str]] = []
+        if video_task is not None:
+            videos = await video_task
+
+        if videos:
+            await asyncio.to_thread(
+                call_course_api,
+                ctx,
+                sender,
+                "",
+                videos,
+                "attachVideos",
+            )
+            reply = f"{reply}{format_video_note(videos)}"
 
         await ctx.send(sender, text_message(reply))
     except Exception as error:
@@ -410,16 +498,23 @@ def config_status_message() -> str:
         "Feynman Course Agent is online.",
         f"Course API: {'configured' if get_course_api_url() else 'MISSING — set COURSE_API_URL'}",
         f"API secret: {'configured' if get_agent_api_secret() else 'MISSING — set AGENT_COURSE_API_SECRET'}",
+        f"Video agents: {'enabled (Agentverse search)' if should_use_agent_video_discovery() else 'disabled — set AGENTVERSE_API_KEY'}",
     ]
     return "\n".join(parts)
 
 
+def should_use_agent_video_discovery() -> bool:
+    """Agent-to-agent video discovery — default on when AGENTVERSE_API_KEY is set."""
+    flag = os.environ.get("ENABLE_AGENT_VIDEO_DISCOVERY", "").strip().lower()
+    if flag in {"0", "false", "no"}:
+        return False
+    if flag in {"1", "true", "yes"}:
+        return bool(get_agentverse_api_key())
+    return bool(get_agentverse_api_key())
+
+
 def video_discovery_enabled() -> bool:
-    return os.environ.get("ENABLE_AGENT_VIDEO_DISCOVERY", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    return should_use_agent_video_discovery()
 
 
 def course_prompt_for_topic(topic: str) -> str:
@@ -535,6 +630,18 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
             await ctx.send(sender, text_message(config_status_message()))
             return
 
+        if is_likely_drawing_request(message):
+            topic = drawing_topic_from_message(message)
+            await ctx.send(
+                sender,
+                text_message(
+                    f"Setting up your drawing coach for **{topic}**. "
+                    "I'll send the canvas link in my next message…"
+                ),
+            )
+            asyncio.create_task(process_drawing_session(ctx, sender, topic))
+            return
+
         if is_likely_topic_request(message):
             topic, notes = split_topic_and_notes(message)
             course_message = course_prompt_for_topic(topic)
@@ -543,7 +650,8 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
                 sender,
                 text_message(
                     f"Got it — building your course on **{topic.strip()}**. "
-                    "This usually takes 30–90 seconds. I'll send the full course in my next message."
+                    "I'm also asking Agentverse video specialist agents for recommendations. "
+                    "This usually takes 30–90 seconds — I'll send everything in my next message."
                 ),
             )
 

@@ -1,4 +1,5 @@
 import { ragPromptSection, compressRetrievedChunks } from "@/lib/course/rag/compress";
+import { recordCompressionStats } from "@/lib/course/rag/compressionStore";
 import { ingestSourceMaterial } from "@/lib/course/rag/ingest";
 import { retrieveRelevantChunks } from "@/lib/course/rag/retrieve";
 import type { RagContext } from "@/lib/course/rag/types";
@@ -15,7 +16,7 @@ export type BuildRagContextOptions = {
  * Full RAG pipeline:
  * 1. Ingestion — chunk, embed, store
  * 2. Retrieval — pull relevant chunks for the query
- * 3. Compression — squeeze chunks before the LLM prompt
+ * 3. Compression — squeeze chunks via Token Company API before the LLM prompt
  * 4. (Generation happens in the caller using ragPromptSection output)
  */
 export async function buildRagContext(
@@ -35,7 +36,10 @@ export async function buildRagContext(
 
   const { index } = await ingestSourceMaterial(sessionKey, sourceText);
   const retrieved = await retrieveRelevantChunks(index, query, topK);
-  const compressed = await compressRetrievedChunks(retrieved, query);
+  const { compressed, stats } = await compressRetrievedChunks(retrieved, query);
+
+  // Store stats so the API route can include them in the response for the UI
+  recordCompressionStats(sessionKey, stats);
 
   return {
     compressed,

@@ -13,6 +13,7 @@ import {
 } from "@/lib/supabase/sync-course";
 import { formatSupabaseError } from "@/lib/supabase/errors";
 import { isAgentCourseRequest } from "@/lib/agent-auth";
+import { getCompressionStats } from "@/lib/course/rag/compressionStore";
 
 export const maxDuration = 120;
 
@@ -127,6 +128,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const compressionStats = getCompressionStats(sessionId);
+
   const response = NextResponse.json({
     reply: result.reply,
     phase: result.session.phase,
@@ -135,6 +138,7 @@ export async function POST(request: NextRequest) {
     moduleCount: result.session.modules.length,
     courseDocument: result.session.document,
     savedCourseId: savedCourseId || undefined,
+    compressionStats: compressionStats ?? undefined,
   });
 
   response.cookies.set("course_session", sessionId, {

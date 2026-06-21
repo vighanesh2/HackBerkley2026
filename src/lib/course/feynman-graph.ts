@@ -222,28 +222,66 @@ async function generateCourseDocument(state: State): Promise<Partial<State>> {
   const topic = state.userMessage.trim();
   const notes = state.session.userNotes;
 
+  // Strip common filler phrases to get the real subject the user wants to learn.
+  // e.g. "I want to learn machine learning" → "machine learning"
+  const strippedTopic = topic
+    .replace(/^(i want to learn|teach me about|teach me|learn about|learn|explain|help me (understand|learn)|what is|tell me about)\s*/i, "")
+    .trim();
+
+  // Vague reference phrases — the user said "teach me this" or "this course" meaning
+  // "whatever is in my notes", not a real topic name.
+  const VAGUE_REFS = /^(this|it|that|these|those|this course|the course|my course|this topic|the topic|my notes|these notes|this material|from my notes|teach me from my notes)$/i;
+
+  // A topic is specific only if something real remains after stripping AND it isn't
+  // just a pronoun/reference pointing to the uploaded notes.
+  const hasSpecificTopic =
+    strippedTopic.length > 0 &&
+    !VAGUE_REFS.test(strippedTopic) &&
+    (strippedTopic.split(/\s+/).length >= 2 || strippedTopic.length > 12);
+
+  // Use the cleaned topic as the RAG query so retrieval finds relevant chunks.
+  // If topic is vague and notes exist, retrieve broadly from the notes.
+  const ragQuery = hasSpecificTopic ? strippedTopic : "main concepts key topics overview";
+
   const notesContext = await getNotesContext(
     state.sessionKey,
     notes,
-    `Create an online text course about: ${topic}`,
+    ragQuery,
     8,
   );
 
   const structured = model.withStructuredOutput(courseDocumentSchema);
+
+  // Build the user prompt differently depending on whether a specific topic was given.
+  let userPrompt: string;
+  if (hasSpecificTopic) {
+    // User gave a real topic — notes are supplementary only.
+    userPrompt = [
+      `Create a complete online text course on: ${strippedTopic}`,
+      notesContext,
+      hasUserNotes(notes)
+        ? `The course topic is "${strippedTopic}". Stay focused on that topic. Use the retrieved source excerpts above only where they add relevant examples, definitions, or depth for this specific topic. Do not shift the course to cover unrelated content from the excerpts.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  } else if (hasUserNotes(notes)) {
+    // User gave no specific topic but uploaded notes — derive the subject from the notes.
+    userPrompt = [
+      "The learner has uploaded their own study material. Using the retrieved excerpts below, identify the main subject and create a complete online text course on it.",
+      notesContext,
+      "Base the course title, modules, and content on the subject matter in the retrieved excerpts. Use the learner's own terminology and structure where helpful.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  } else {
+    // No specific topic, no notes — fall back to the raw message.
+    userPrompt = `Create a complete online text course for: ${topic}`;
+  }
+
   const result = await structured.invoke([
     { role: "system", content: ONLINE_TEXT_COURSE_PROMPT },
-    {
-      role: "user",
-      content: [
-        `Create a complete online text course for: ${topic}`,
-        notesContext,
-        hasUserNotes(notes)
-          ? "Ground every module in the retrieved source excerpts above. Reference the learner's terminology where helpful."
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-    },
+    { role: "user", content: userPrompt },
   ]);
 
   let document = toCourseDocument(result);
@@ -256,15 +294,22 @@ async function generateCourseDocument(state: State): Promise<Partial<State>> {
     document = mergeAgentVideos(document, agentVideos);
   } else if (!state.skipVideoDiscovery) {
     try {
+      // Use the generated course title as the video search query, not the raw user
+      // message — the title is always a clean subject like "Machine Learning Basics",
+      // even when the user typed something vague like "teach me this course".
+      const videoSearchTopic = document.title || strippedTopic || topic;
       const discovered = await discoverVideosForCourse(
-        topic,
+        videoSearchTopic,
         document.modules.map((module) => module.title),
       );
       if (discovered.featured || discovered.moduleVideos.length > 0) {
         document = mergeDiscoveredVideos(document, discovered);
+      } else {
+        console.warn("[video-discovery] search returned no results for:", videoSearchTopic);
       }
-    } catch {
+    } catch (err) {
       // Video search is optional — course still works without videos.
+      console.error("[video-discovery] failed:", err instanceof Error ? err.message : err);
     }
   }
 
