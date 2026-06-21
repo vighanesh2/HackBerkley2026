@@ -2,12 +2,14 @@
 Feynman Course Agent — deploy on Agentverse as a Hosted Agent.
 
 Required Agent Secrets:
-  MARKETPLACE_API_URL    — e.g. https://your-app.vercel.app/api/course
-  AGENTVERSE_API_KEY     — for searching & messaging video specialist agents
-  ASI_API_KEY            — only if the backend URL is not configured (fallback chat)
+  COURSE_API_URL           — e.g. https://your-app.vercel.app/api/course
+  AGENT_COURSE_API_SECRET  — must match AGENT_COURSE_API_SECRET on Vercel (server auth)
+  AGENTVERSE_API_KEY       — for searching & messaging video specialist agents
 
-The hosted backend runs LangGraph + ASI-1 for course generation and Feynman tutoring.
-This agent also queries other Agentverse agents to find the best related videos.
+Legacy secret name MARKETPLACE_API_URL still works for COURSE_API_URL.
+
+The hosted backend runs LangGraph + ASI-1 + RAG (when notes are included).
+Web users sign in via Supabase; Agentverse calls use the shared API secret.
 """
 
 from __future__ import annotations
@@ -91,7 +93,10 @@ def is_likely_topic_request(message: str) -> bool:
 
 
 def get_course_api_url() -> str | None:
-    api_url = os.environ.get("MARKETPLACE_API_URL", "").strip().rstrip("/")
+    api_url = (
+        os.environ.get("COURSE_API_URL", "").strip()
+        or os.environ.get("MARKETPLACE_API_URL", "").strip()
+    ).rstrip("/")
     if not api_url:
         return None
     if not api_url.endswith("/api/course"):
@@ -100,6 +105,22 @@ def get_course_api_url() -> str | None:
         else:
             api_url = f"{api_url}/api/course"
     return api_url
+
+
+def get_agent_api_secret() -> str | None:
+    key = (
+        os.environ.get("AGENT_COURSE_API_SECRET", "").strip()
+        or os.environ.get("LISTINGS_API_SECRET", "").strip()
+    )
+    return key or None
+
+
+def course_api_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    secret = get_agent_api_secret()
+    if secret:
+        headers["X-Agent-Api-Key"] = secret
+    return headers
 
 
 def get_agentverse_api_key() -> str | None:
@@ -325,8 +346,15 @@ def call_course_api(
     api_url = get_course_api_url()
     if not api_url:
         return (
-            "Course API is not configured. Set MARKETPLACE_API_URL to your deployed "
+            "Course API is not configured. Set COURSE_API_URL to your deployed "
             "/api/course endpoint in Agent Secrets."
+        )
+
+    secret = get_agent_api_secret()
+    if not secret:
+        return (
+            "AGENT_COURSE_API_SECRET is not set in Agent Secrets. "
+            "It must match the same value on your Vercel deployment."
         )
 
     payload: dict = {"message": message, "sessionId": sender}
@@ -341,8 +369,8 @@ def call_course_api(
         response = requests.post(
             api_url,
             json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=90,
+            headers=course_api_headers(),
+            timeout=120,
         )
         response.raise_for_status()
         data = response.json()
@@ -391,8 +419,9 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
     message = normalize_message(text)
     if not message:
         reply = (
-            "What would you like to learn? I'll build a course, find the best videos "
-            "via other Agentverse agents, and teach you using the Feynman Technique."
+            "What would you like to learn? I'll build a course (with RAG if you add "
+            "--- notes --- and your material), find videos via Agentverse agents, "
+            "and teach you using the Feynman Technique."
         )
     elif is_likely_topic_request(message):
         topic, notes = split_topic_and_notes(message)

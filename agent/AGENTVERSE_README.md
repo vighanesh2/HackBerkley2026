@@ -34,10 +34,12 @@ User (ASI:One Chat)
     → Agentverse Hosted Agent (ACP)
         → Agentverse Search API (find video specialist agents)
         → Agent-to-agent chat (request best YouTube/video links)
-        → Next.js API (/api/course)
-            → LangGraph Feynman state machine
+        → Next.js API (/api/course) + X-Agent-Api-Key
+            → LangGraph Feynman state machine + RAG on uploaded notes
                 → ASI-1 (outline, teach, evaluate)
 ```
+
+Web app users hit the same API after Supabase login and get cloud library saves.
 
 ## Tech stack
 

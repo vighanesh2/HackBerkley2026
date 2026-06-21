@@ -3,20 +3,28 @@
 ## Architecture
 
 ```
-ASI:One Chat  →  Agentverse (agent/agent.py)  →  Vercel /api/course  →  LangGraph + ASI-1
+ASI:One Chat  →  Agentverse (agent/agent.py)  →  Vercel /api/course  →  LangGraph + RAG + ASI-1
+Web browser   →  Next.js (Supabase auth)       →  same /api/course   →  + cloud library saves
 ```
+
+Agentverse uses a **shared API secret** (not Supabase login). The web app uses **email/password + Supabase**.
 
 ## Step 1 — Deploy Next.js to Vercel
 
 1. Push to GitHub and import on [vercel.com](https://vercel.com)
-2. Set environment variable:
+2. Set environment variables:
 
 | Variable | Value |
 |----------|--------|
 | `ASI_API_KEY` | from [asi1.ai/dashboard/api-keys](https://asi1.ai/dashboard/api-keys) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (instant sign-up, optional) |
+| `AGENT_COURSE_API_SECRET` | random secret string — **same value** as Agentverse secret |
 | `NEXT_PUBLIC_APP_URL` | `https://your-app.vercel.app` |
 
-3. Redeploy
+3. Run `supabase/schema.sql` in Supabase SQL Editor
+4. Redeploy
 
 Your course API: **`https://your-app.vercel.app/api/course`**
 
@@ -29,8 +37,11 @@ Your course API: **`https://your-app.vercel.app/api/course`**
 
 | Secret | Value |
 |--------|--------|
-| `MARKETPLACE_API_URL` | `https://your-app.vercel.app/api/course` |
+| `COURSE_API_URL` | `https://your-app.vercel.app/api/course` |
+| `AGENT_COURSE_API_SECRET` | same random string as Vercel |
 | `AGENTVERSE_API_KEY` | from [agentverse.ai/profile/api-keys](https://agentverse.ai/profile/api-keys) |
+
+Legacy names `MARKETPLACE_API_URL` and `LISTINGS_API_SECRET` still work.
 
 5. Click **Run**
 
@@ -41,14 +52,23 @@ Your course API: **`https://your-app.vercel.app/api/course`**
 3. Say: *"I want to learn basic cryptography"*
 4. Confirm outline → read lesson → explain back → watch gap remediation
 
+### Optional: RAG notes via agent chat
+
+```
+I want to learn linear algebra
+--- notes ---
+Your pasted textbook excerpt or study notes here...
+```
+
 ## Demo script (60 seconds)
 
-> "Most AI tutors just dump text. This agent generates a full course from your goal, then uses the Feynman Technique — teach simply, you explain back, it finds gaps and re-teaches until you actually understand. The tutoring loop runs on LangGraph with ASI-1."
+> "Most AI tutors just dump text. This agent generates a full course from your goal — grounded in your notes via RAG — then uses the Feynman Technique. The tutoring loop runs on LangGraph with ASI-1."
 
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
 | `ASI_API_KEY is not configured` | Add key in Vercel env vars and redeploy |
-| `Course API is not configured` | Set `MARKETPLACE_API_URL` to `/api/course` in Agentverse |
-| Agent timeout | Course generation can take 10–30s; agent timeout is 60s |
+| `Unauthorized` / 401 from course API | Set matching `AGENT_COURSE_API_SECRET` on Vercel **and** Agentverse |
+| `Course API is not configured` | Set `COURSE_API_URL` in Agentverse secrets |
+| Agent timeout | Course generation can take 30–90s; agent timeout is 120s |

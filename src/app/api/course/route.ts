@@ -12,6 +12,7 @@ import {
   syncSavedCourse,
 } from "@/lib/supabase/sync-course";
 import { formatSupabaseError } from "@/lib/supabase/errors";
+import { isAgentCourseRequest } from "@/lib/agent-auth";
 
 type CourseRequestBody = {
   message?: string;
@@ -24,8 +25,10 @@ type CourseRequestBody = {
 };
 
 export async function POST(request: NextRequest) {
-  const user = await getAuthUser();
-  if (!user) {
+  const fromAgent = isAgentCourseRequest(request);
+  const user = fromAgent ? null : await getAuthUser();
+
+  if (!fromAgent && !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
     saveCourseSession(sessionId, updated);
 
     let savedCourseId = savedCourseIdInput;
-    if (savedCourseId) {
+    if (savedCourseId && user) {
       await syncSavedCourse(user.id, savedCourseId, updated, chatMessages);
     }
 
@@ -98,20 +101,22 @@ export async function POST(request: NextRequest) {
   saveCourseSession(sessionId, result.session);
 
   let savedCourseId = savedCourseIdInput;
-  try {
-    if (savedCourseId) {
-      await syncSavedCourse(user.id, savedCourseId, result.session, [
-        ...chatMessages,
-        { role: "assistant", text: result.reply },
-      ]);
-    } else if (result.session.document) {
-      savedCourseId = await createSavedCourseForSession(user.id, result.session, [
-        ...chatMessages,
-        { role: "assistant", text: result.reply },
-      ]);
+  if (user) {
+    try {
+      if (savedCourseId) {
+        await syncSavedCourse(user.id, savedCourseId, result.session, [
+          ...chatMessages,
+          { role: "assistant", text: result.reply },
+        ]);
+      } else if (result.session.document) {
+        savedCourseId = await createSavedCourseForSession(user.id, result.session, [
+          ...chatMessages,
+          { role: "assistant", text: result.reply },
+        ]);
+      }
+    } catch (error) {
+      console.error("Failed to sync course to Supabase:", formatSupabaseError(error));
     }
-  } catch (error) {
-    console.error("Failed to sync course to Supabase:", formatSupabaseError(error));
   }
 
   const response = NextResponse.json({

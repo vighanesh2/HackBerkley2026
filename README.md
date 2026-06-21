@@ -54,15 +54,13 @@ Open [http://localhost:3000](http://localhost:3000) and try: *"I want to learn P
 
 ### 3. Deploy Agentverse agent
 
-1. Deploy this app to Vercel with `ASI_API_KEY` set
-2. Paste `agent/agent.py` into Agentverse **Build** tab
-3. Paste `agent/AGENTVERSE_README.md` into **README** tab
-4. Set secret: `MARKETPLACE_API_URL` = `https://your-app.vercel.app/api/course`
-5. Test on ASI:One with Agents toggle on
+See [AGENTVERSE_DEPLOY.md](./AGENTVERSE_DEPLOY.md). Set `COURSE_API_URL`, `AGENT_COURSE_API_SECRET` (same on Vercel), and `AGENTVERSE_API_KEY` in Agentverse secrets.
 
 ## API
 
 ### `POST /api/course`
+
+Requires **Supabase session cookie** (web) or **`X-Agent-Api-Key`** header matching `AGENT_COURSE_API_SECRET` (Agentverse).
 
 ```json
 {
