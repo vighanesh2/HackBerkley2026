@@ -1,0 +1,15 @@
+---
+description: Careful workflow and safety standards for the compression pipeline project
+alwaysApply: true
+---
+
+# Compression Pipeline Workflow
+
+- Work meticulously and do not rush. Read the relevant plan, tests, and implementation before making changes.
+- Use bounded loops with concrete verifiers. Stop when tests pass, benchmark sweeps finish, or the max iteration count is reached.
+- If an API key, SDK install, package choice, account access, rate-limit decision, or other user-provided input is needed, pause the loop and ask the user instead of guessing.
+- When adding or using a library/package, prefer the latest stable version. Verify the package name, current stable release, and official usage instead of guessing or choosing outdated versions.
+- Verify one real Token Company API call manually before automating loops against the hosted API.
+- Keep `.env` out of git. Do not commit secrets, API keys, tokens, credentials, or local config.
+- Ensure `.env` is listed in `.gitignore` before any commit or PR work.
+- The compression layer must never throw into the live course-generation path. On compression failure, return original input with fallback stats. On empty input, return empty output with zeroed stats and do not call the API.

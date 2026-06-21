@@ -1,0 +1,36 @@
+{
+  "name": "berkeley-ai-hackathon-compression",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/src/compressionPipeline.js",
+  "types": "dist/src/compressionPipeline.d.ts",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && npm run build:lib && npm run build:ui",
+    "build:lib": "tsc",
+    "build:ui": "vite build",
+    "benchmark": "tsx scripts/runBenchmark.ts",
+    "benchmark:openai": "tsx scripts/runBenchmark.ts --mode=openai",
+    "verify:ttc": "tsx scripts/verifyTokenCompany.ts"
+  },
+  "dependencies": {
+    "openai": "^6.44.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "the-token-company": "^0.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
+  }
+}
