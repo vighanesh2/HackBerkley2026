@@ -14,6 +14,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from urllib.parse import quote
 from uuid import uuid4
 
 import requests
@@ -23,6 +24,7 @@ from uagents_core.contrib.protocols.chat import (
     ChatAcknowledgement,
     ChatMessage,
     EndSessionContent,
+    MetadataContent,
     TextContent,
     chat_protocol_spec,
 )
@@ -47,6 +49,13 @@ def save_session(ctx: Context, sender: str, session: dict) -> None:
 
 def clear_session(ctx: Context, sender: str) -> None:
     ctx.storage.set(storage_key(sender), None)
+
+
+def add_seller_watch(ctx: Context, sender: str) -> None:
+    watchlist = ctx.storage.get("watchlist") or []
+    if sender not in watchlist:
+        watchlist.append(sender)
+    ctx.storage.set("watchlist", watchlist)
 
 
 def parse_price(text: str) -> float | None:
@@ -94,7 +103,7 @@ def build_summary(draft: dict) -> str:
         f"Description: {draft.get('description')}\n"
         f"Price: ${draft.get('price')}\n"
         f"Category: {draft.get('category')}\n\n"
-        'Reply "yes" to auto-post to Shopify or "no" to cancel.'
+        'Reply "yes" to post or "no" to cancel.'
     )
 
 
@@ -157,12 +166,92 @@ def get_listings_api_url() -> str | None:
     return api_url
 
 
-def post_listing(ctx: Context, draft: dict, seller_id: str) -> str:
+def get_notifications_api_url() -> str | None:
+    listings_url = get_listings_api_url()
+    if not listings_url:
+        return None
+    return listings_url.replace("/api/listings", "/api/notifications")
+
+
+def auth_headers() -> dict:
+    secret = os.environ.get("LISTINGS_API_SECRET")
+    headers = {"Content-Type": "application/json"}
+    if secret:
+        headers["Authorization"] = f"Bearer {secret}"
+    return headers
+
+
+def terminal_card_message(narration: str, root: dict) -> ChatMessage:
+    return ChatMessage(
+        timestamp=datetime.now(timezone.utc),
+        msg_id=uuid4(),
+        content=[
+            TextContent(type="text", text=narration),
+            MetadataContent(
+                type="metadata",
+                metadata={
+                    "card_protocol_version": "1",
+                    "requires_card_interaction": "false",
+                    "is_terminal": "true",
+                    "card_kind": "custom",
+                    "card_payload": json.dumps({"root": root}),
+                    "preferred_drawer_width_px": "420",
+                },
+            ),
+            EndSessionContent(type="end-session"),
+        ],
+    )
+
+
+def text_message(text: str) -> ChatMessage:
+    return ChatMessage(
+        timestamp=datetime.now(timezone.utc),
+        msg_id=uuid4(),
+        content=[
+            TextContent(type="text", text=text),
+            EndSessionContent(type="end-session"),
+        ],
+    )
+
+
+def live_card_root(title: str, price: float, category: str, listing_url: str | None) -> dict:
+    children = [
+        {"type": "badge", "label": "LIVE", "variant": "success"},
+        {"type": "text", "value": f"${price:g} · {category}", "style": "body"},
+    ]
+    if listing_url:
+        children.append({"type": "text", "value": listing_url, "style": "muted"})
+    return {
+        "type": "section",
+        "title": title,
+        "subtitle": "Your listing is live",
+        "children": children,
+    }
+
+
+def sold_card_root(title: str, price: float) -> dict:
+    return {
+        "type": "section",
+        "title": title,
+        "subtitle": "Great news!",
+        "children": [
+            {"type": "badge", "label": "SOLD ✓", "variant": "success"},
+            {"type": "text", "value": f"Sold for ${price:g}", "style": "emphasis"},
+            {
+                "type": "text",
+                "value": "Payment received — your item found a buyer.",
+                "style": "muted",
+            },
+        ],
+    }
+
+
+def post_listing(ctx: Context, draft: dict, seller_id: str) -> dict:
     api_url = get_listings_api_url()
     secret = os.environ.get("LISTINGS_API_SECRET")
 
     if not api_url:
-        return "MARKETPLACE_API_URL is not configured in Agent Secrets."
+        return {"ok": False, "error": "MARKETPLACE_API_URL is not configured in Agent Secrets."}
 
     headers = {"Content-Type": "application/json"}
     if secret:
@@ -182,12 +271,15 @@ def post_listing(ctx: Context, draft: dict, seller_id: str) -> str:
         data = response.json()
         listing_url = data.get("shopifyUrl") or data.get("url")
         admin_url = data.get("shopifyAdminUrl")
-        if listing_url:
-            reply = f"Done! Your product is live on Shopify.\n\nStore: {listing_url}"
-            if admin_url:
-                reply += f"\nAdmin: {admin_url}"
-            return reply
-        return "Product posted to Shopify successfully."
+        return {
+            "ok": True,
+            "title": draft["title"],
+            "price": draft["price"],
+            "category": draft["category"],
+            "listing_url": listing_url,
+            "admin_url": admin_url,
+            "product_id": data.get("listing", {}).get("shopifyProductId"),
+        }
     except requests.RequestException as error:
         ctx.logger.exception("Failed to post listing")
         response_text = ""
@@ -198,45 +290,23 @@ def post_listing(ctx: Context, draft: dict, seller_id: str) -> str:
             except Exception:
                 response_text = error.response.text[:200]
         detail = response_text or str(error)
-        return f"Could not post to Shopify: {detail}"
+        return {"ok": False, "error": detail}
 
 
 def process_message(ctx: Context, sender: str, text: str) -> str:
     message = normalize_message(text)
-    lower = message.lower()
     session = get_session(ctx, sender)
     step = session.get("step", "idle")
     draft = session.get("draft", {})
 
     if step == "confirm":
-        if is_affirmative(message):
-            required = ("title", "description", "price", "category")
-            if not all(draft.get(field) for field in required):
-                clear_session(ctx, sender)
-                return "Something was missing from the draft. Say \"list item\" to start over."
-
-            reply = post_listing(ctx, draft, seller_id=sender[:16])
-            clear_session(ctx, sender)
-            return reply
-
-        if is_negative(message):
-            clear_session(ctx, sender)
-            return 'Listing cancelled. Say "list item" whenever you want to try again.'
-
         return 'Please reply "yes" to post or "no" to cancel.'
 
     if step == "idle":
         if not wants_to_list(message):
-            asi_reply = ask_asi(
-                "You are a Shopify listing assistant. Help users post products to their Shopify store. "
-                "Keep replies under 3 sentences.",
-                message,
-            )
-            if asi_reply:
-                return asi_reply
             return (
-                'I auto-post products to Shopify for you. Say "list item" or '
-                'describe what you want to sell, e.g. "Sell my desk for $80".'
+                "What would you like me to sell? "
+                'Describe the item and price — e.g. "my desk for $80".'
             )
 
         extracted = extract_listing_from_message(message)
@@ -266,7 +336,7 @@ def process_message(ctx: Context, sender: str, text: str) -> str:
         save_session(ctx, sender, session)
 
         prompts = {
-            "title": "What is the product title?",
+            "title": "What would you like me to sell?",
             "description": "Great. Now give me a short description for buyers.",
             "price": "What price should I list it for? (e.g. 120 or $120)",
             "category": "What category fits best? (e.g. Electronics, Furniture, Clothing)",
@@ -304,7 +374,7 @@ def process_message(ctx: Context, sender: str, text: str) -> str:
 
     session["step"] = "idle"
     save_session(ctx, sender, session)
-    return 'Say "list item" to start a new listing.'
+    return "Tell me what you'd like to sell to start a new listing."
 
 
 @protocol.on_message(ChatMessage)
@@ -322,24 +392,110 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage):
         if isinstance(item, TextContent):
             text += item.text
 
-    reply = process_message(ctx, sender, text)
+    message = normalize_message(text)
+    session = get_session(ctx, sender)
 
-    await ctx.send(
-        sender,
-        ChatMessage(
-            timestamp=datetime.now(timezone.utc),
-            msg_id=uuid4(),
-            content=[
-                TextContent(type="text", text=reply),
-                EndSessionContent(type="end-session"),
-            ],
-        ),
-    )
+    if session.get("step") == "confirm" and is_affirmative(message):
+        draft = session.get("draft", {})
+        required = ("title", "description", "price", "category")
+        if not all(draft.get(field) for field in required):
+            clear_session(ctx, sender)
+            await ctx.send(
+                sender,
+                text_message(
+                    "Something was missing from the draft. Tell me what you'd like to sell to start over."
+                ),
+            )
+            return
+
+        await ctx.send(sender, text_message("Publishing your listing..."))
+        result = post_listing(ctx, draft, seller_id=sender)
+        clear_session(ctx, sender)
+
+        if result.get("ok"):
+            add_seller_watch(ctx, sender)
+            card = live_card_root(
+                title=str(result["title"]),
+                price=float(result["price"]),
+                category=str(result["category"]),
+                listing_url=result.get("listing_url"),
+            )
+            narration = f"Done! {result['title']} is live."
+            await ctx.send(sender, terminal_card_message(narration, card))
+            return
+
+        await ctx.send(
+            sender,
+            text_message(f"Could not publish your listing: {result.get('error', 'Unknown error')}"),
+        )
+        return
+
+    if session.get("step") == "confirm" and is_negative(message):
+        clear_session(ctx, sender)
+        await ctx.send(
+            sender,
+            text_message("Listing cancelled. Tell me what you'd like to sell whenever you're ready."),
+        )
+        return
+
+    reply = process_message(ctx, sender, text)
+    await ctx.send(sender, text_message(reply))
 
 
 @protocol.on_message(ChatAcknowledgement)
 async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
     pass
+
+
+@agent.on_interval(period=15.0)
+async def poll_sold_notifications(ctx: Context):
+    watchlist = ctx.storage.get("watchlist") or []
+    if not watchlist:
+        return
+
+    api_url = get_notifications_api_url()
+    if not api_url:
+        return
+
+    headers = auth_headers()
+
+    for seller in watchlist:
+        try:
+            response = requests.get(
+                f"{api_url}?sellerId={quote(seller, safe='')}",
+                headers=headers,
+                timeout=10,
+            )
+            response.raise_for_status()
+            notifications = response.json().get("notifications", [])
+        except Exception:
+            ctx.logger.exception("Failed to poll sold notifications")
+            continue
+
+        delivered_ids = []
+        for note in notifications:
+            title = str(note.get("title", "Your item"))
+            price = float(note.get("price", 0))
+            card = sold_card_root(title, price)
+            await ctx.send(
+                seller,
+                terminal_card_message(f"✓ Sold! {title} just found a buyer.", card),
+            )
+            if note.get("id"):
+                delivered_ids.append(note["id"])
+
+        if not delivered_ids:
+            continue
+
+        try:
+            requests.post(
+                api_url,
+                headers=headers,
+                json={"action": "ack", "ids": delivered_ids},
+                timeout=10,
+            )
+        except Exception:
+            ctx.logger.exception("Failed to ack sold notifications")
 
 
 agent.include(protocol, publish_manifest=True)

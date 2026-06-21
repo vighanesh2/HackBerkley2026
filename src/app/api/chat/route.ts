@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
       });
 
     const reply = publishedToShopify
-      ? `Done! Your product is live on Shopify.\n\nStore: ${shopifyUrl}\nAdmin: ${shopifyAdminUrl}`
-      : `Listing saved locally but Shopify publish failed: ${listing.shopifyError ?? "Unknown error"}. Add SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_ACCESS_TOKEN to .env.local.`;
+      ? `Done! Your listing is live.\n\nView: ${shopifyUrl}${shopifyAdminUrl ? `\nManage: ${shopifyAdminUrl}` : ""}`
+      : `Your listing could not be published: ${listing.shopifyError ?? "Unknown error"}. Please try again.`;
 
     const response = NextResponse.json({
       reply,

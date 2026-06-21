@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { isShopifyConfigured, publishProductToShopify } from "@/lib/shopify";
+import { indexLiveProduct } from "@/lib/product-index";
 import type { CreateListingInput, Listing } from "@/types/listing";
 
 function getDataFile(): string {
@@ -148,6 +149,14 @@ export async function createListing(
         shopifyStatus: "live",
         publishedToShopifyAt: new Date().toISOString(),
       };
+
+      await indexLiveProduct({
+        shopifyProductId: shopify.productId,
+        sellerId: listing.sellerId,
+        listingId: listing.id,
+        title: listing.title,
+        price: listing.price,
+      });
     } catch (error) {
       listing = {
         ...listing,

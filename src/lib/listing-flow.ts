@@ -70,13 +70,13 @@ export function wantsToList(text: string): boolean {
 
 export function buildSummary(draft: ListingDraft): string {
   return [
-    "Here's your Shopify product listing:",
+    "Here's your listing:",
     `Title: ${draft.title}`,
     `Description: ${draft.description}`,
     `Price: $${draft.price}`,
     `Category: ${draft.category}`,
     "",
-    'Reply "yes" to auto-post to Shopify.',
+    'Reply "yes" to post or "no" to cancel.',
   ].join("\n");
 }
 
@@ -93,7 +93,7 @@ export function processListingMessage(
       const draft = session.draft as Required<ListingDraft>;
       clearSession(sessionId);
       return {
-        reply: "Publishing to Shopify...",
+        reply: "Publishing your listing...",
         readyToPost: true,
         draft,
       };
@@ -102,7 +102,7 @@ export function processListingMessage(
     if (isNegative(message)) {
       clearSession(sessionId);
       return {
-        reply: "Listing cancelled. Say \"list item\" whenever you want to try again.",
+        reply: "Listing cancelled. Tell me what you'd like to sell whenever you're ready.",
         readyToPost: false,
       };
     }
@@ -117,7 +117,7 @@ export function processListingMessage(
     if (!wantsToList(text)) {
       return {
         reply:
-          'I auto-post products to Shopify for you. Say "list item" or describe what you want to sell, like "Sell my desk for $80".',
+          'What would you like me to sell? Describe the item and price — e.g. "my desk for $80".',
         readyToPost: false,
       };
     }
@@ -139,7 +139,7 @@ export function processListingMessage(
     session.step = "title";
     saveSession(sessionId, session);
     return {
-      reply: "What is the product title?",
+      reply: "What would you like me to sell?",
       readyToPost: false,
     };
   }
@@ -193,7 +193,7 @@ export function processListingMessage(
   }
 
   return {
-    reply: 'Say "list item" to start a new listing.',
+    reply: "Tell me what you'd like to sell to start a new listing.",
     readyToPost: false,
   };
 }

@@ -123,6 +123,41 @@ That URL is your **Shopify backend**, not the agent. The agent endpoint comes fr
 
 ---
 
+## Sold notifications (LIVE card + SOLD ✓ tick)
+
+After a listing goes live, ASI:One shows an interactive **LIVE** card. When the product sells, the agent polls for notifications and pushes a **SOLD ✓** card to the seller in chat.
+
+### 1. Register Shopify order webhook
+
+In Shopify Admin → **Settings** → **Notifications** → **Webhooks** → **Create webhook**:
+
+| Field | Value |
+|-------|--------|
+| Event | `Order creation` |
+| URL | `https://hack-berkley2026.vercel.app/api/shopify/webhooks/orders` |
+| Format | JSON |
+
+Signing secret: copy into Vercel as `SHOPIFY_WEBHOOK_SECRET` (or it falls back to `SHOPIFY_CLIENT_SECRET`).
+
+### 2. Redeploy agent on Agentverse
+
+Paste the latest `agent/agent.py` and click **Run**. The agent polls every 15 seconds for sold items.
+
+### 3. Demo sold tick without a real purchase
+
+After listing from ASI:One, simulate a sale (use your full agent `sender` address from Agentverse logs as `sellerId`):
+
+```bash
+curl -X POST https://hack-berkley2026.vercel.app/api/notifications \
+  -H "Authorization: Bearer YOUR_LISTINGS_API_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"simulate-sold","sellerId":"YOUR_SENDER_ADDRESS","title":"Road Bike","price":450}'
+```
+
+Within ~15 seconds the agent sends the **SOLD ✓** card in ASI:One chat.
+
+---
+
 ## Docs
 
 - [ASI:One compatible hosted agent](https://agentverse.ai/docs/uAgents/asimini-agent)

@@ -8,7 +8,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-widest text-zinc-500">
-              ASI:One + Agentverse + Shopify
+              ASI:One + Agentverse
             </p>
             <h1 className="text-xl font-semibold tracking-tight">
               SellAnything Agent
@@ -30,7 +30,7 @@ export default function Home() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Posted products</h2>
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              Products the agent creates appear here with links to your live Shopify store.
+              Products the agent creates appear here with links to view them live.
             </p>
           </div>
           <MarketplaceFeed />
@@ -40,7 +40,7 @@ export default function Home() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Try the agent</h2>
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              Describe what you want to sell. The agent posts it to Shopify via the real Admin API.
+              Tell the agent what you want to sell — it handles the rest.
             </p>
           </div>
           <ListingChat />
@@ -50,7 +50,7 @@ export default function Home() {
               Agentverse deployment (hackathon track)
             </p>
             <ol className="mt-3 list-decimal space-y-2 pl-5">
-              <li>Deploy this app to Vercel (Shopify creds on server)</li>
+              <li>Deploy this app to Vercel (store credentials on server)</li>
               <li>Paste <code className="text-xs">agent/agent.py</code> into Agentverse Build tab</li>
               <li>Paste <code className="text-xs">agent/AGENTVERSE_README.md</code> into README tab</li>
               <li>Add secrets: ASI_API_KEY, MARKETPLACE_API_URL, LISTINGS_API_SECRET</li>

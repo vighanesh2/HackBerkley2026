@@ -17,7 +17,7 @@ export default function MarketplaceGrid({ listings }: { listings: Listing[] }) {
           No products yet
         </p>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          Chat with the agent to auto-post your first product to Shopify.
+          Chat with the agent to post your first product.
         </p>
       </div>
     );
@@ -37,7 +37,7 @@ export default function MarketplaceGrid({ listings }: { listings: Listing[] }) {
               </span>
               {listing.shopifyStatus === "live" && (
                 <span className="rounded-full bg-[#F4F8EC] px-2.5 py-1 text-xs font-medium text-[#435A2B]">
-                  Live on Shopify
+                  Live
                 </span>
               )}
             </div>
@@ -62,7 +62,7 @@ export default function MarketplaceGrid({ listings }: { listings: Listing[] }) {
               rel="noopener noreferrer"
               className="mt-4 inline-block text-sm font-medium text-[#96BF48] hover:underline"
             >
-              View on Shopify →
+              View listing →
             </a>
           )}
         </div>

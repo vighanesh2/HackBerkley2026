@@ -27,7 +27,7 @@ export default async function ListingPage({ params }: PageProps) {
       <header className="border-b border-zinc-200 dark:border-zinc-800">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <Link href="/" className="text-lg font-semibold tracking-tight">
-            Shopify Listing Agent
+            SellAnything
           </Link>
           <Link
             href="/"
@@ -47,12 +47,12 @@ export default async function ListingPage({ params }: PageProps) {
               </span>
               {listing.shopifyStatus === "live" && (
                 <span className="rounded-full bg-[#F4F8EC] px-3 py-1 text-sm font-medium text-[#435A2B]">
-                  Live on Shopify
+                  Live
                 </span>
               )}
               {listing.shopifyStatus === "failed" && (
                 <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
-                  Shopify publish failed
+                  Publish failed
                 </span>
               )}
             </div>
@@ -78,7 +78,7 @@ export default async function ListingPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="rounded-xl bg-[#96BF48] px-4 py-2 text-sm font-medium text-white hover:bg-[#7da63a]"
               >
-                View on Shopify store
+                View listing
               </a>
             )}
             {listing.shopifyAdminUrl && (
@@ -88,7 +88,7 @@ export default async function ListingPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
               >
-                Open in Shopify Admin
+                Manage listing
               </a>
             )}
           </div>

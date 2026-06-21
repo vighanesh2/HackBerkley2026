@@ -9,7 +9,7 @@ type ChatMessage = {
 };
 
 const START_MESSAGE =
-  'Hi! I\'m your Shopify Listing Agent. Tell me what to sell — e.g. "Sell my road bike for $450" — and I\'ll post it to your Shopify store.';
+  'What would you like me to sell? Describe the item and price — e.g. "my road bike for $450".';
 
 export default function ListingChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -75,9 +75,9 @@ export default function ListingChat() {
 
       <div className="flex h-[420px] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800">
         <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <p className="text-sm font-medium">Shopify listing agent</p>
+          <p className="text-sm font-medium">SellAnything</p>
           <p className="text-xs text-zinc-500">
-            Real posts via Shopify Admin API
+            Tell me what to sell — I&apos;ll handle the rest
           </p>
         </div>
 
@@ -107,7 +107,7 @@ export default function ListingChat() {
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder='e.g. "Sell my desk for $80"'
+            placeholder='e.g. "my desk for $80"'
             className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
             disabled={loading}
           />

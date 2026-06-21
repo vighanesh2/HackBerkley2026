@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shopify Listing Agent",
-  description: "AI agent that auto-posts products to Shopify via ASI:One and Agentverse",
+  title: "SellAnything",
+  description: "AI agent that sells for you via ASI:One and Agentverse",
 };
 
 export default function RootLayout({
